@@ -1,1 +1,5 @@
+These are the sources for the respective data used. None of it was altered in anyway before being read into R.
+
 "API_GC.DOD.TOTL.GD.ZS_DS2_en_csv_v2_4750057" from https://data.worldbank.org/indicator/GC.DOD.TOTL.GD.ZS?end=2020&locations=ZG&start=2016
+
+"AidDatasGlobalChineseDevelopmentFinanceDataset_v2.0" from https://www.aiddata.org/data/aiddatas-global-chinese-development-finance-dataset-version-2-0
