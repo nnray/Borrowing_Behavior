@@ -1,0 +1,6 @@
+---
+title: "Analysis"
+author: "Nicholas Ray"
+date: "12/13/2022"
+output: pdf_document
+---
