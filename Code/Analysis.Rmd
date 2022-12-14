@@ -4,3 +4,21 @@ author: "Nicholas Ray"
 date: "12/13/2022"
 output: pdf_document
 ---
+<!-- Loading relevant libraries. -->
+```{r Libraries}
+library(here)
+library(readxl)
+library(tidyverse)
+```
+
+<!-- Loading relevant data. -->
+```{r}
+unzip(here("Data","Loans","aiddataChina", "AidDatasGlobalChineseDevelopmentFinanceDataset_v2.0.zip"))
+Cloans<-read_excel(here("Code", "AidDatasGlobalChineseDevelopmentFinanceDataset_v2.0.xlsx"), sheet = 5)
+unzip(here("Data","Debt","API_GC.DOD.TOTL.GD.ZS_DS2_en_csv_v2_4750057.zip"))
+Debt<-read_csv(here("Code","API_GC.DOD.TOTL.GD.ZS_DS2_en_csv_v2_4750057.csv"),skip=4)
+```
+
+<!-- Cleaning data. -->
+```{r Cleaning}
+```
