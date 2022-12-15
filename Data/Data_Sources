@@ -1,5 +1,19 @@
 These are the sources for the respective data used. None of it was altered in anyway before being read into R.
 
-"API_GC.DOD.TOTL.GD.ZS_DS2_en_csv_v2_4750057" from https://data.worldbank.org/indicator/GC.DOD.TOTL.GD.ZS?end=2020&locations=ZG&start=2016
+Government Debt
+"API_GC.DOD.TOTL.GD.ZS_DS2_en_csv_v2_4750057" from https://data.worldbank.org/indicator/GC.DOD.TOTL.GD.ZS
 
+Chinese finance
 "AidDatasGlobalChineseDevelopmentFinanceDataset_v2.0" from https://www.aiddata.org/data/aiddatas-global-chinese-development-finance-dataset-version-2-0
+
+GDP per capita
+"UNdata_Export_20221013_230550739" from https://data.un.org/Data.aspx?d=SNAAMA&f=grID%3A101%3BcurrID%3AUSD%3BpcFlag%3A1
+
+GDP deflator
+"USAGDPDEFAISMEI" from https://fred.stlouisfed.org/series/usagdpdefaismei
+
+Polity
+"p5v2018" from https://www.systemicpeace.org/inscrdata.html
+
+World Bank finance
+"API_DT.DOD.MWBG.CD_DS2_en_csv_v2_4523873" from https://data.worldbank.org/indicator/DT.DOD.MWBG.CD
