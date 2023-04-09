@@ -21,39 +21,55 @@ wb<-read_csv(here("Code","API_DT.DOD.MWBG.CD_DS2_en_csv_v2_4523873.csv"),skip=4)
 polity<-read_excel(here("Data", "PoliticalFreedom", "p5v2018.xls"))
 unzip(here("Data", "GDP", "UNdata_Export_20221013_234232609.zip"))
 gdp<-read.csv(here("Code", "UNdata_Export_20221013_234232609.csv"))
+dfp<-read_excel(here("Data", "DPFdevpolicyactiondatabase.xlsx"), sheet = 3)
 ```
 
 <!-- Cleaning data. -->
 ```{r cleaning, message=FALSE, warning=FALSE, include=FALSE}
-african_countries<-c("Algeria","Angola","Benin","Botswana","Burundi",
-                     "Burkina Faso","Cabo Verde","Cameroon",
+african_countries<-c("Algeria","Angola","Benin","Botswana","Burkina Faso",
+                     "Burundi","Cabo Verde","Cameroon",
                      "Central African Republic","Chad","Comoros",
                      "Cote d'Ivoire","Democratic Republic of the Congo",
                      "Djibouti","Egypt","Equatorial Guinea","Eritrea",
                      "Eswatini","Ethiopia","Gabon","Gambia","Ghana","Guinea",
                      "Guinea-Bissau","Kenya","Lesotho","Liberia","Libya",
-                     "Madagascar","Malawi","Mali","Mauritania","Somalia",
-                     "Mauritius","Morocco","Mozambique","Namibia","Niger",
-                     "Nigeria","Republic of the Congo","Rwanda","Senegal",
-                     "Sierra Leone","South Africa","Togo","Tunisia","Uganda",
-                     "Seychelles","South Sudan","Sudan","Sao Tome and Principe",
-                     "Tanzania","Zambia","Zimbabwe")
+                     "Madagascar","Malawi","Mali","Mauritania","Mauritius",
+                     "Morocco","Mozambique","Namibia","Niger","Nigeria",
+                     "Republic of the Congo","Rwanda","Sao Tome and Principe",
+                     "Senegal","Seychelles","Sierra Leone","Somalia",
+                     "South Africa","South Sudan","Sudan","Tanzania","Togo",
+                     "Tunisia","Uganda","Zambia","Zimbabwe")
+dfp["Country"][dfp["Country"] == "Congo"] <- "Republic of the Congo"
+dfp["Country"][dfp["Country"] == "Congo, Democratic Republic of"] <- "Democratic Republic of the Congo"
+dfp["Country"][dfp["Country"] == "Côte d'ivoire"] <- "Cote d'Ivoire"
+dfp["Country"][dfp["Country"] == "Egypt, Arab Republic of"] <- "Egypt"
+dfp["Country"][dfp["Country"] == "Gambia, The"] <- "Gambia"
+dfp["Country"][dfp["Country"] == "The Gambia"] <- "Gambia"
+dfp["Country"][dfp["Country"] == "Sierar Leone"] <- "Sierra Leone"
+dfp<-subset(dfp,`Country` %in% african_countries)
+dfp<-dfp %>%
+  rename(country=Country,year=FY,project=`Project ID`) %>%
+  mutate(conditions=1) %>%
+  group_by(country,year,project) %>%
+  summarise(conditions=sum(conditions)) %>%
+  group_by(country,year) %>%
+  summarise(avg_conditions=mean(conditions)) #avg cond per country per year
+china["Recipient"][china["Recipient"] == "Congo"] <- "Republic of the Congo"
+china<- subset(china, Recipient %in% african_countries)
 china<-china %>%
   rename(country=`Recipient`,year=`Commitment Year`) %>% #chose commitment year as year, maybe controversial
   filter(`Flow Type`=="Loan") %>%
-  group_by(`country`,`year`) %>%
+  group_by(country,year) %>%
   summarise(cloan=sum(`Amount (Nominal)`)) #constant usd 2017
-china2<- china %>% 
+china2<-china %>% 
   group_by(country) %>% 
-  mutate(Earliest.Year = 2000) %>%
+  mutate(beginning = 2000) %>%
   select(-cloan, -year) %>% 
   distinct() %>%
-  expand(year = Earliest.Year:2017, Earliest.Year) %>%
-  select(-Earliest.Year)
+  expand(year = beginning:2017, beginning) %>%
+  select(-beginning)
 china<- china2 %>%
   left_join(china, by = c("country", "year"))
-china["country"][china["country"] == "Congo"] <- "Republic of the Congo"
-china<- subset(china, country %in% african_countries)
 wb<-wb %>%
   pivot_longer("1960":"2021", names_to = "year", values_to = "wbloan") %>%
   rename(country=`Country Name`) %>%
@@ -73,7 +89,7 @@ polity["country"][polity["country"] == "Cote D'Ivoire"] <- "Cote d'Ivoire"
 polity["country"][polity["country"] == "Ivory Coast"] <- "Cote d'Ivoire"
 polity["country"][polity["country"] == "Swaziland"] <- "Eswatini"
 polity<-subset(polity, `country` %in% african_countries)
-polity<- polity %>%
+polity<-polity %>%
   filter(`year` > "1999" & `year` < "2018") %>%
   select(`country`,`year`,`polity2`) %>%
   rename(polity=`polity2`) 
@@ -81,13 +97,15 @@ gdp["Country.or.Area"][gdp["Country.or.Area"] == "CÃ´te d'Ivoire"] <- "Cote d'
 gdp["Country.or.Area"][gdp["Country.or.Area"] == "Congo"] <- "Republic of the Congo"
 gdp["Country.or.Area"][gdp["Country.or.Area"] == " Former Sudan"]<- "South Sudan"
 gdp<-subset(gdp, `Country.or.Area` %in% african_countries)
-gdp<- gdp %>%
+gdp<-gdp %>%
   filter(`Year` > "1999" & `Year` < "2018") %>%
   select(`Country.or.Area`,`Year`,`Value`) %>%
   rename(country=`Country.or.Area`,year=Year,gdp=Value)
 data<-full_join(wb, polity, by = c("country","year")) %>%
   full_join(., gdp, by = c("country","year")) %>%
   full_join(., china, by = c("country","year"))
+data["cloan"][is.na(data["cloan"])] <- 0 #reasonable assumption?
+data["wbloan"][is.na(data["wbloan"])] <- 0
 deflator<-read.csv(here("Data","GDP","USAGDPDEFAISMEI.csv"))
 #gdp deflator found here https://fred.stlouisfed.org/series/usagdpdefaismei
 deflator<- rename(deflator,value=USAGDPDEFAISMEI)
@@ -100,14 +118,12 @@ deflator<- as.matrix(deflator)
 deflator<-1/deflator
 data$cloan<-diag(data$cloan) %*% deflator
 data$wbloan<-diag(data$wbloan) %*% deflator
-data["cloan"][is.na(data["cloan"])] <- 0
-data["wbloan"][is.na(data["wbloan"])] <- 0
 data<-data %>%
   mutate(log_cloan=log(cloan),log_wbloan=log(wbloan),
          log_gdp=log(gdp))
 data["log_cloan"][data["log_cloan"] == -Inf] <- 0
 data["log_wbloan"][data["log_wbloan"] == -Inf] <- 0
-data<-mutate(data,competition=(log_wbloan-log_cloan))
+data<-mutate(data,mixing=(log_wbloan-log_cloan))
 ```
 ```{r figures, include=FALSE,warning=FALSE,message=FALSE}
 library(panelr)
@@ -121,8 +137,8 @@ data_p1<-subset(data_p,`country` %in% c("Algeria","Angola","Benin","Botswana",
                                         "Eritrea","Eswatini","Ethiopia","Gabon",
                                         "Gambia","Ghana","Guinea","Guinea-Bissau",
                                         "Kenya","Lesotho"))
-plot1<-data_p1 %>%
-  line_plot(competition, 
+plot1<-data_p1 %>% #using 1700 width, 1200 height for export
+  line_plot(mixing, 
             overlay = FALSE,
             add.mean = TRUE)
 data_p2<-subset(data_p,`country` %in% c("Liberia","Libya",
@@ -135,7 +151,7 @@ data_p2<-subset(data_p,`country` %in% c("Liberia","Libya",
                                         "South Sudan","Sudan","Sao Tome and Principe",
                                         "Tanzania","Zambia","Zimbabwe"))
 plot2<-data_p2 %>%
-  line_plot(competition, 
+  line_plot(mixing, 
             overlay = FALSE,
             add.mean = TRUE)
 ```
