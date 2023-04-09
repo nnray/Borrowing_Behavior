@@ -125,6 +125,8 @@ data["log_cloan"][data["log_cloan"] == -Inf] <- 0
 data["log_wbloan"][data["log_wbloan"] == -Inf] <- 0
 data<-mutate(data,mixing=(log_wbloan-log_cloan))
 ```
+
+<!-- Making figures. -->
 ```{r figures, include=FALSE,warning=FALSE,message=FALSE}
 library(panelr)
 data_p<-panel_data(data,id=country,wave=year)
