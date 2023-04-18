@@ -7,7 +7,7 @@ output: pdf_document
 <!-- Loading relevant libraries. -->
 ```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
 library(here);library(readxl);library(plm);library(sandwich);library(gridExtra);
-library(stargazer);library(tidyverse)
+library(stargazer);library(panelr); library(tidyverse)
 ```
 
 <!-- Loading relevant data. -->
@@ -123,13 +123,11 @@ data<-data %>%
          log_gdp=log(gdp))
 data["log_cloan"][data["log_cloan"] == -Inf] <- 0
 data["log_wbloan"][data["log_wbloan"] == -Inf] <- 0
-data<-mutate(data,mixing=(log_wbloan-log_cloan))
 ```
 
 <!-- Making figures. -->
 ```{r figures, include=FALSE,warning=FALSE,message=FALSE}
-library(panelr)
-data_p<-panel_data(data,id=country,wave=year)
+data_p<-panel_data(data,id=country,wave=year) #to use with line_plot()
 data_p1<-subset(data_p,`country` %in% c("Algeria","Angola","Benin","Botswana",
                                         "Burundi","Burkina Faso","Cabo Verde",
                                         "Cameroon","Central African Republic",
@@ -140,9 +138,9 @@ data_p1<-subset(data_p,`country` %in% c("Algeria","Angola","Benin","Botswana",
                                         "Gambia","Ghana","Guinea","Guinea-Bissau",
                                         "Kenya","Lesotho"))
 plot1<-data_p1 %>% #using 1700 width, 1200 height for export
-  line_plot(mixing, 
-            overlay = FALSE,
-            add.mean = TRUE)
+  line_plot(log_wbloan,
+            overlay = FALSE) +
+  geom_line(mapping=aes(y=log_cloan),data=data_p1)
 data_p2<-subset(data_p,`country` %in% c("Liberia","Libya",
                                         "Madagascar","Malawi","Mali","Mauritania",
                                         "Somalia","Mauritius","Morocco",
@@ -152,8 +150,17 @@ data_p2<-subset(data_p,`country` %in% c("Liberia","Libya",
                                         "Tunisia","Uganda","Seychelles",
                                         "South Sudan","Sudan","Sao Tome and Principe",
                                         "Tanzania","Zambia","Zimbabwe"))
-plot2<-data_p2 %>%
-  line_plot(mixing, 
-            overlay = FALSE,
-            add.mean = TRUE)
+plot2<-data_p2 %>% #using 1700 width, 1200 height for export
+  line_plot(log_wbloan,
+            overlay = FALSE) +
+  geom_line(mapping=aes(y=log_cloan),data=data_p2)
+#conditions (have to include condition data too)
+data2<-data %>%
+  drop_na() %>%
+  group_by(year) %>%
+  summarise(conditions=sum(avg_conditions),conflict=sum(conflict)) %>% #sum of every country's avg conditions per project in a given year
+  select(-year)
+data_ts<-data2 %>%
+  ts(.,start = 2004,end = 2017)
+plot.ts(data_ts)
 ```
