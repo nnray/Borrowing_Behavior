@@ -49,6 +49,7 @@ dfp["Country"][dfp["Country"] == "Sierar Leone"] <- "Sierra Leone"
 dfp<-subset(dfp,`Country` %in% african_countries)
 dfp<-dfp %>%
   rename(country=Country,year=FY,project=`Project ID`) %>%
+  filter(year > "1999" & year < "2018") %>%
   mutate(conditions=1) %>%
   group_by(country,year,project) %>%
   summarise(conditions=sum(conditions)) %>%
@@ -103,7 +104,8 @@ gdp<-gdp %>%
   rename(country=`Country.or.Area`,year=Year,gdp=Value)
 data<-full_join(wb, polity, by = c("country","year")) %>%
   full_join(., gdp, by = c("country","year")) %>%
-  full_join(., china, by = c("country","year"))
+  full_join(., china, by = c("country","year")) %>%
+  full_join(., dfp, by = c("country","year"))
 data["cloan"][is.na(data["cloan"])] <- 0 #reasonable assumption?
 data["wbloan"][is.na(data["wbloan"])] <- 0
 deflator<-read.csv(here("Data","GDP","USAGDPDEFAISMEI.csv"))
@@ -158,7 +160,7 @@ plot2<-data_p2 %>% #using 1700 width, 1200 height for export
 data2<-data %>%
   drop_na() %>%
   group_by(year) %>%
-  summarise(conditions=sum(avg_conditions),conflict=sum(conflict)) %>% #sum of every country's avg conditions per project in a given year
+  summarise(conditions=sum(avg_conditions)) %>% #sum of every country's avg conditions per project in a given year
   select(-year)
 data_ts<-data2 %>%
   ts(.,start = 2004,end = 2017)
