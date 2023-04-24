@@ -39,10 +39,19 @@ deflator<-read.csv( #found at https://fred.stlouisfed.org/series/usagdpdefaismei
 polity<-read_excel(
   here("data","politics","p5v2018.xls")
   )
+voting<-read.csv(
+  here("data","politics","resolutions.csv")
+  )
 #conflict
 ucdp<-read_xlsx(
   unzip(here("data","conflict","ucdp-prio-acd-221-xlsx.zip"))
   )
+#climate
+emissions<-read.csv(
+  unzip(here("data","climate",
+             "P_Data_Extract_From_World_Development_Indicators.zip"),
+        "f9f2f018-84e3-4634-9d43-156d9e836b14_Data.csv")
+)
 ```
 
 <!-- Cleaning data. -->
@@ -127,6 +136,12 @@ gdp<-gdp %>%
   filter(`Year` > "1999" & `Year` < "2018") %>%
   select(`Country.or.Area`,`Year`,`Value`) %>%
   rename(country=`Country.or.Area`,year=Year,gdp=Value)
+################################################################################
+#cleaning UN voting data (GA)
+voting
+################################################################################
+#cleaning WB sustainable goal of reduced emissions
+emisssions
 ################################################################################
 #creating dataset
 data<-full_join(wb, polity, by = c("country","year")) %>%
