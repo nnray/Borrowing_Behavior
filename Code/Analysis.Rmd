@@ -2,30 +2,53 @@
 title: "Analysis"
 author: "Nicholas Ray"
 date: "12/13/2022"
-output: pdf_document
+output: html_document
 ---
 <!-- Loading relevant libraries. -->
 ```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
-library(here);library(readxl);library(plm);library(sandwich);library(gridExtra);
-library(stargazer);library(panelr); library(tidyverse)
+library(here);library(plm);library(sandwich);library(gridExtra);library(readxl);
+library(panelr);library(stargazer);library(tidyverse)
 ```
 
 <!-- Loading relevant data. -->
 ```{r data, message=FALSE, warning=FALSE, include=FALSE}
-unzip(here("Data","Loans","aiddataChina", "AidDatasGlobalChineseDevelopmentFinanceDataset_v2.0.zip"))
-china<-read_excel(here("Code", "AidDatasGlobalChineseDevelopmentFinanceDataset_v2.0.xlsx"), sheet = 5)
-unzip(here("Data","Debt","API_GC.DOD.TOTL.GD.ZS_DS2_en_csv_v2_4750057.zip"))
-debt<-read_csv(here("Code","API_GC.DOD.TOTL.GD.ZS_DS2_en_csv_v2_4750057.csv"),skip=4)
-unzip(here("Data","Loans","API_DT.DOD.MWBG.CD_DS2_en_csv_v2_4523873.zip"))
-wb<-read_csv(here("Code","API_DT.DOD.MWBG.CD_DS2_en_csv_v2_4523873.csv"),skip=4)
-polity<-read_excel(here("Data", "PoliticalFreedom", "p5v2018.xls"))
-unzip(here("Data", "GDP", "UNdata_Export_20221013_234232609.zip"))
-gdp<-read.csv(here("Code", "UNdata_Export_20221013_234232609.csv"))
-dfp<-read_excel(here("Data", "DPFdevpolicyactiondatabase.xlsx"), sheet = 3)
+#loans
+china<-read_excel(
+  unzip(here("data","loans",
+             "AidDatasGlobalChineseDevelopmentFinanceDataset_v2.0.zip")),
+        sheet=5
+  )
+wb<-read_csv(
+  unzip(here("data","loans","API_DT.DOD.MWBG.CD_DS2_en_csv_v2_4523873.zip"),
+        "API_DT.DOD.MWBG.CD_DS2_en_csv_v2_4523873.csv"),
+  skip=4
+  )
+dfp<-read_excel(
+  here("data","loans","DPFdevpolicyactiondatabase.xlsx"),
+  sheet=3
+  )
+#gdp
+gdp<-read.csv(
+  unzip(here("data","gdp","UNdata_Export_20221013_234232609.zip"),
+        "UNdata_Export_20221013_234232609.csv"),
+  )
+deflator<-read.csv( #found at https://fred.stlouisfed.org/series/usagdpdefaismei
+  here("data","gdp","USAGDPDEFAISMEI.csv")
+  )
+#politics
+polity<-read_excel(
+  here("data","politics","p5v2018.xls")
+  )
+#conflict
+ucdp<-read_xlsx(
+  unzip(here("data","conflict","ucdp-prio-acd-221-xlsx.zip"))
+  )
 ```
 
 <!-- Cleaning data. -->
 ```{r cleaning, message=FALSE, warning=FALSE, include=FALSE}
+#for some reason I find country codes unreliable, so here I am declaring the
+#names of all African countries to use in future subsetting
 african_countries<-c("Algeria","Angola","Benin","Botswana","Burkina Faso",
                      "Burundi","Cabo Verde","Cameroon",
                      "Central African Republic","Chad","Comoros",
@@ -39,6 +62,8 @@ african_countries<-c("Algeria","Angola","Benin","Botswana","Burkina Faso",
                      "Senegal","Seychelles","Sierra Leone","Somalia",
                      "South Africa","South Sudan","Sudan","Tanzania","Togo",
                      "Tunisia","Uganda","Zambia","Zimbabwe")
+################################################################################
+#cleaning the data on WB loan conditionality
 dfp["Country"][dfp["Country"] == "Congo"] <- "Republic of the Congo"
 dfp["Country"][dfp["Country"] == "Congo, Democratic Republic of"] <- "Democratic Republic of the Congo"
 dfp["Country"][dfp["Country"] == "Côte d'ivoire"] <- "Cote d'Ivoire"
@@ -54,23 +79,19 @@ dfp<-dfp %>%
   group_by(country,year,project) %>%
   summarise(conditions=sum(conditions)) %>%
   group_by(country,year) %>%
-  summarise(avg_conditions=mean(conditions)) #avg cond per country per year
+  summarise(conditions=mean(conditions)) #`conditions` is now the average number
+#of conditions per project in a given country year
+################################################################################
+#cleaning the data on Chinese loans
 china["Recipient"][china["Recipient"] == "Congo"] <- "Republic of the Congo"
 china<- subset(china, Recipient %in% african_countries)
 china<-china %>%
-  rename(country=`Recipient`,year=`Commitment Year`) %>% #chose commitment year as year, maybe controversial
+  rename(country=`Recipient`,year=`Commitment Year`) %>% #chose commitment year as `year`, maybe controversial
   filter(`Flow Type`=="Loan") %>%
   group_by(country,year) %>%
   summarise(cloan=sum(`Amount (Nominal)`)) #constant usd 2017
-china2<-china %>% 
-  group_by(country) %>% 
-  mutate(beginning = 2000) %>%
-  select(-cloan, -year) %>% 
-  distinct() %>%
-  expand(year = beginning:2017, beginning) %>%
-  select(-beginning)
-china<- china2 %>%
-  left_join(china, by = c("country", "year"))
+################################################################################
+#cleaning the data on WB loans
 wb<-wb %>%
   pivot_longer("1960":"2021", names_to = "year", values_to = "wbloan") %>%
   rename(country=`Country Name`) %>%
@@ -82,6 +103,8 @@ wb["country"][wb["country"] == "Congo, Dem. Rep."] <- "Democratic Republic of th
 wb["country"][wb["country"] == "Egypt, Arab Rep."] <- "Egypt"
 wb["country"][wb["country"] == "Gambia, The"] <- "Gambia"
 wb<-subset(wb, country %in% african_countries)
+################################################################################
+#cleaning the data on Polity scores
 polity["country"][polity["country"] == "Cape Verde"] <- "Cabo Verde"
 polity["country"][polity["country"] == "Congo-Brazzaville"] <- "Republic of the Congo"
 polity["country"][polity["country"] == "Congo Brazzaville"] <- "Republic of the Congo"
@@ -93,7 +116,9 @@ polity<-subset(polity, `country` %in% african_countries)
 polity<-polity %>%
   filter(`year` > "1999" & `year` < "2018") %>%
   select(`country`,`year`,`polity2`) %>%
-  rename(polity=`polity2`) 
+  rename(polity=`polity2`)
+################################################################################
+#cleaning the data on GDP per capita
 gdp["Country.or.Area"][gdp["Country.or.Area"] == "CÃ´te d'Ivoire"] <- "Cote d'Ivoire"
 gdp["Country.or.Area"][gdp["Country.or.Area"] == "Congo"] <- "Republic of the Congo"
 gdp["Country.or.Area"][gdp["Country.or.Area"] == " Former Sudan"]<- "South Sudan"
@@ -102,14 +127,16 @@ gdp<-gdp %>%
   filter(`Year` > "1999" & `Year` < "2018") %>%
   select(`Country.or.Area`,`Year`,`Value`) %>%
   rename(country=`Country.or.Area`,year=Year,gdp=Value)
+################################################################################
+#creating dataset
 data<-full_join(wb, polity, by = c("country","year")) %>%
   full_join(., gdp, by = c("country","year")) %>%
   full_join(., china, by = c("country","year")) %>%
   full_join(., dfp, by = c("country","year"))
-data["cloan"][is.na(data["cloan"])] <- 0 #reasonable assumption?
-data["wbloan"][is.na(data["wbloan"])] <- 0
-deflator<-read.csv(here("Data","GDP","USAGDPDEFAISMEI.csv"))
-#gdp deflator found here https://fred.stlouisfed.org/series/usagdpdefaismei
+data["cloan"][is.na(data["cloan"])] <- 0 #assuming didn't receive loans if NA
+data["wbloan"][is.na(data["wbloan"])] <- 0 #assuming didn't receive loans if NA
+################################################################################
+#rebasing loan data to real 2015 US $
 deflator<- rename(deflator,value=USAGDPDEFAISMEI)
 deflator<- subset(deflator,value < 103 & value > 73) %>%
   select(value)
@@ -120,6 +147,8 @@ deflator<- as.matrix(deflator)
 deflator<-1/deflator
 data$cloan<-diag(data$cloan) %*% deflator
 data$wbloan<-diag(data$wbloan) %*% deflator
+################################################################################
+#logging financial data for easier comparison
 data<-data %>%
   mutate(log_cloan=log(cloan),log_wbloan=log(wbloan),
          log_gdp=log(gdp))
@@ -129,6 +158,7 @@ data["log_wbloan"][data["log_wbloan"] == -Inf] <- 0
 
 <!-- Making figures. -->
 ```{r figures, include=FALSE,warning=FALSE,message=FALSE}
+#figure 1
 data_p<-panel_data(data,id=country,wave=year) #to use with line_plot()
 data_p1<-subset(data_p,`country` %in% c("Algeria","Angola","Benin","Botswana",
                                         "Burundi","Burkina Faso","Cabo Verde",
@@ -156,11 +186,12 @@ plot2<-data_p2 %>% #using 1700 width, 1200 height for export
   line_plot(log_wbloan,
             overlay = FALSE) +
   geom_line(mapping=aes(y=log_cloan),data=data_p2)
-#conditions (have to include condition data too)
+################################################################################
+#figure 2
 data2<-data %>%
   drop_na() %>%
   group_by(year) %>%
-  summarise(conditions=sum(avg_conditions)) %>% #sum of every country's avg conditions per project in a given year
+  summarise(conditions=sum(conditions)) %>% #sum of every country's avg conditions per project in a given year
   select(-year)
 data_ts<-data2 %>%
   ts(.,start = 2004,end = 2017)
