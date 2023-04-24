@@ -40,8 +40,9 @@ polity<-read_excel(
   here("data","politics","p5v2018.xls")
   )
 voting<-read.csv(
-  here("data","politics","resolutions.csv")
-  )
+  unzip(here("data","politics","dataverse_files.zip"),
+        "UNVotes-1.csv")
+)
 #conflict
 ucdp<-read_xlsx(
   unzip(here("data","conflict","ucdp-prio-acd-221-xlsx.zip"))
@@ -71,6 +72,8 @@ african_countries<-c("Algeria","Angola","Benin","Botswana","Burkina Faso",
                      "Senegal","Seychelles","Sierra Leone","Somalia",
                      "South Africa","South Sudan","Sudan","Tanzania","Togo",
                      "Tunisia","Uganda","Zambia","Zimbabwe")
+################################################################################
+#cleaning the UNGA voting data.
 ################################################################################
 #cleaning the data on WB loan conditionality
 dfp["Country"][dfp["Country"] == "Congo"] <- "Republic of the Congo"
@@ -137,17 +140,36 @@ gdp<-gdp %>%
   select(`Country.or.Area`,`Year`,`Value`) %>%
   rename(country=`Country.or.Area`,year=Year,gdp=Value)
 ################################################################################
-#cleaning UN voting data (GA)
-voting
+#cleaning conflict data
+ucdp<-ucdp%>%
+  mutate(country=strsplit(as.character(location), ", ")) %>%
+  unnest(country) %>%
+  mutate(conflict=1) %>%
+  group_by(country,year) %>%
+  summarise(country, year, conflicts=sum(conflict)) %>%
+  distinct() %>%
+  filter(year > "1999" & year < "2018")
+ucdp<-subset(ucdp, `country` %in% african_countries)
 ################################################################################
 #cleaning WB sustainable goal of reduced emissions
-emisssions
+emissions<-emissions %>%
+  pivot_longer("X1997..YR1997.":"X2021..YR2021.",names_to = "year",
+               values_to = "emissions") %>%
+  rename(country=Country.Name) %>%
+  select(country,year,emissions)
+emissions$emissions<-as.numeric(emissions$emissions)
+emissions$year<-str_remove(emissions$year,"\\..*")
+emissions$year<-as.numeric(str_remove(emissions$year,"X"))
+emissions<-filter(emissions,"1999"<year & year<"2018")
+emissions<-subset(emissions, country %in% african_countries)
 ################################################################################
 #creating dataset
-data<-full_join(wb, polity, by = c("country","year")) %>%
-  full_join(., gdp, by = c("country","year")) %>%
+data<-full_join(ucdp, polity, by = c("country","year")) %>%
+  full_join(., emissions, by = c("country","year")) %>%
+  full_join(., dfp, by = c("country","year")) %>%
   full_join(., china, by = c("country","year")) %>%
-  full_join(., dfp, by = c("country","year"))
+  full_join(., wb, by = c("country","year")) %>%
+  full_join(., gdp, by = c("country","year"))
 data["cloan"][is.na(data["cloan"])] <- 0 #assuming didn't receive loans if NA
 data["wbloan"][is.na(data["wbloan"])] <- 0 #assuming didn't receive loans if NA
 ################################################################################
@@ -223,4 +245,18 @@ data_ts3<-data3 %>%
   select(-log_cloan) %>%
   ts(.,start = 2004,end = 2017)
 plot.ts(data_ts3)
+```
+
+<!-- Conducting empirical analysis. -->
+```{r}
+p_data<-pdata.frame(data,index = c("country","year"))
+p_data<-p_data %>%
+  group_by(country,year) %>%
+  mutate(borrowing=log_cloan+log_wbloan)
+borrowing<-plm(borrowing~conditions+log_gdp+polity,p_data,model=c("within"))
+summary(borrowing) #lower conditions should increase borrowing (due to taking Chinese loans to reduce conditions)
+conflict<-plm(conflicts~conditions+log_gdp+polity,p_data,model=c("within"))
+summary(conflict) #Lower conditionality should increase conflict (due to implied presence of Chinese debt)
+effectiveness<-plm(emissions~log_cloan+log_gdp+polity,p_data,model=c("within"))
+summary(effectiveness) #Chinese money should increase emissions (due to decreased effectiveness of WB conditions)
 ```
