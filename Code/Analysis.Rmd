@@ -278,7 +278,7 @@ plot.ts(data_ts3)
 ```
 
 <!-- Conducting empirical analysis. -->
-```{r}
+```{r eval=FALSE, include=FALSE}
 ################################################################################
 #panel data frame, panel unit root testing
 pdata<-pdata.frame(data,index = c("country","year"))
