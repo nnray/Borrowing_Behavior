@@ -7,7 +7,7 @@ output: html_document
 <!-- Loading relevant libraries. -->
 ```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
 library(here);library(plm);library(sandwich);library(gridExtra);library(readxl);
-library(panelr);library(stargazer);library(tidyverse)
+library(panelr);library(stargazer);library(readstata13);library(tidyverse)
 ```
 
 <!-- Loading relevant data. -->
@@ -39,9 +39,8 @@ deflator<-read.csv( #found at https://fred.stlouisfed.org/series/usagdpdefaismei
 polity<-read_excel(
   here("data","politics","p5v2018.xls")
   )
-voting<-read.csv(
-  unzip(here("data","politics","UNVotes.zip"),
-        "UNVotes-1.csv")
+voting<-read.dta13(
+  here("data","politics","Apples_and_Dragonfruits_Replication_Data","dragon_fruits.dta"),
 )
 #conflict
 ucdp<-read_xlsx(
@@ -73,7 +72,21 @@ african_countries<-c("Algeria","Angola","Benin","Botswana","Burkina Faso",
                      "South Africa","South Sudan","Sudan","Tanzania","Togo",
                      "Tunisia","Uganda","Zambia","Zimbabwe")
 ################################################################################
-#cleaning the UNGA voting data.
+#cleaning the UNGA voting data from Dreher et al. replication data
+voting["recipient_condensed"][voting["recipient_condensed"] == "Congo, Rep."] <- "Republic of the Congo"
+voting["recipient_condensed"][voting["recipient_condensed"] == "Congo, Dem. Rep."] <- "Democratic Republic of the Congo"
+voting["recipient_condensed"][voting["recipient_condensed"] == "Central African Rep."] <- "Central African Republic"
+voting["recipient_condensed"][voting["recipient_condensed"] == "Cote D'Ivoire"] <- "Cote d'Ivoire"
+voting["recipient_condensed"][voting["recipient_condensed"] == "Cape Verde"] <- "Cabo Verde"
+voting["recipient_condensed"][voting["recipient_iso3"] == "SWZ"] <- "Eswatani"
+voting["recipient_condensed"][voting["recipient_iso3"] == "GMB"] <- "Gambia"
+voting["recipient_condensed"][voting["recipient_iso3"] == "BFA"] <- "Burkina Faso"
+voting["recipient_condensed"][voting["recipient_iso3"] == "STP"] <- "Sao Tome and Principe"
+voting<-subset(voting,`recipient_condensed` %in% african_countries)
+voting<-voting %>%
+  rename(country=recipient_condensed,year=time,lag_cvote=LINLINECHN,lag_usvote=LINLINEUSA) %>%
+  select(country,year,lag_cvote,lag_usvote) %>%
+  filter(year > "1999" & year < "2018")
 ################################################################################
 #cleaning the data on WB loan conditionality
 dfp["Country"][dfp["Country"] == "Congo"] <- "Republic of the Congo"
@@ -169,9 +182,21 @@ data<-full_join(ucdp, polity, by = c("country","year")) %>%
   full_join(., dfp, by = c("country","year")) %>%
   full_join(., china, by = c("country","year")) %>%
   full_join(., wb, by = c("country","year")) %>%
-  full_join(., gdp, by = c("country","year"))
+  full_join(., gdp, by = c("country","year")) %>%
+  full_join(., voting, by = c("country","year"))
+#dealing with missingness
 data["cloan"][is.na(data["cloan"])] <- 0 #assuming didn't receive loans if NA
 data["wbloan"][is.na(data["wbloan"])] <- 0 #assuming didn't receive loans if NA
+data["conflicts"][is.na(data["conflicts"])] <- 0 #assuming no conflict if NA
+#impute missingness for `conditions` (using average of yearly averages across all countries)
+conditions_missing<- data %>%
+  drop_na() %>%
+  group_by(year) %>%
+  mutate(conditions_missing=mean(conditions)) %>%
+  ungroup() %>%
+  summarise(mean(conditions_missing))
+data_imputed<-data
+data_imputed["conditions"][is.na(data_imputed["conditions"])] <- conditions_missing[[1]]
 ################################################################################
 #rebasing loan data to real 2015 US $
 deflator<- rename(deflator,value=USAGDPDEFAISMEI)
@@ -185,12 +210,17 @@ deflator<-1/deflator
 data$cloan<-diag(data$cloan) %*% deflator
 data$wbloan<-diag(data$wbloan) %*% deflator
 ################################################################################
+#after rebasing, some data manipulation:
 #logging financial data for easier comparison
 data<-data %>%
   mutate(log_cloan=log(cloan),log_wbloan=log(wbloan),
          log_gdp=log(gdp))
 data["log_cloan"][data["log_cloan"] == -Inf] <- 0
 data["log_wbloan"][data["log_wbloan"] == -Inf] <- 0
+#creating DV for first model
+data<-data %>%
+  group_by(country,year) %>%
+  mutate(borrowing=log_cloan+log_wbloan)
 ```
 
 <!-- Making figures. -->
@@ -249,14 +279,15 @@ plot.ts(data_ts3)
 
 <!-- Conducting empirical analysis. -->
 ```{r}
-p_data<-pdata.frame(data,index = c("country","year"))
-p_data<-p_data %>%
-  group_by(country,year) %>%
-  mutate(borrowing=log_cloan+log_wbloan)
-borrowing<-plm(borrowing~conditions+log_gdp+polity,p_data,model=c("within"))
+################################################################################
+#panel data frame, panel unit root testing
+pdata<-pdata.frame(data,index = c("country","year"))
+purtest(pdata$conflicts,test = c("ips"))
+################################################################################
+borrowing<-plm(borrowing~conditions+lag_cvote+log_gdp+polity,pdata,model=c("within"))
 summary(borrowing) #lower conditions should increase borrowing (due to taking Chinese loans to reduce conditions)
-conflict<-plm(conflicts~conditions+log_gdp+polity,p_data,model=c("within"))
+conflict<-plm(conflicts~conditions+log_gdp+polity,pdata,model=c("within"))
 summary(conflict) #Lower conditionality should increase conflict (due to implied presence of Chinese debt)
-effectiveness<-plm(emissions~log_cloan+log_gdp+polity,p_data,model=c("within"))
+effectiveness<-plm(emissions~log_cloan+log_gdp+polity,pdata,model=c("within"))
 summary(effectiveness) #Chinese money should increase emissions (due to decreased effectiveness of WB conditions)
 ```
