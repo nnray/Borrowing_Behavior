@@ -40,7 +40,7 @@ polity<-read_excel(
   here("data","politics","p5v2018.xls")
   )
 voting<-read.csv(
-  unzip(here("data","politics","dataverse_files.zip"),
+  unzip(here("data","politics","UNVotes.zip"),
         "UNVotes-1.csv")
 )
 #conflict
