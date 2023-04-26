@@ -419,3 +419,13 @@ purtest(
 ################################################################################
 #spatial/temporal, etc.
 ```
+
+<!-- Building and analyzing empirical models. -->
+```{r analysis}
+#plm
+```
+
+<!-- Making tables of results. -->
+```{r tables}
+#stargazer
+```
