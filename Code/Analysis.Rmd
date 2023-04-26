@@ -232,53 +232,48 @@ africa<-africa %>%
 <!-- Making figures. -->
 ```{r figures, include=FALSE,warning=FALSE,message=FALSE}
 #figure 1
-figure1.1_data<-panel_data(data,id=country,wave=year) %>% #to use with line_plot()
-  subset(country %in% c("Algeria","Angola","Benin","Botswana",
-                                        "Burundi","Burkina Faso","Cabo Verde",
-                                        "Cameroon","Central African Republic",
-                                        "Chad","Comoros","Cote d'Ivoire",
-                                        "Democratic Republic of the Congo",
-                                        "Djibouti","Egypt","Equatorial Guinea",
-                                        "Eritrea","Eswatini","Ethiopia","Gabon",
-                                        "Gambia","Ghana","Guinea","Guinea-Bissau",
-                                        "Kenya","Lesotho"))
-figure1.1<-figure1.1_data %>% #using 1700 width, 1200 height for export
-  line_plot(log_wbloan,
-            overlay = FALSE) +
-  geom_line(mapping=aes(y=log_cloan),data=figure1.1_data)
-figure1.2_data<-panel_data(data,id=country,wave=year) %>%
-  subset(country %in% c("Liberia","Libya",
-                                        "Madagascar","Malawi","Mali","Mauritania",
-                                        "Somalia","Mauritius","Morocco",
-                                        "Mozambique","Namibia","Niger","Nigeria",
-                                        "Republic of the Congo","Rwanda","Senegal",
-                                        "Sierra Leone","South Africa","Togo",
-                                        "Tunisia","Uganda","Seychelles",
-                                        "South Sudan","Sudan","Sao Tome and Principe",
-                                        "Tanzania","Zambia","Zimbabwe"))
-figure1.2<-figure1.2_data %>% #using 1700 width, 1200 height for export
-  line_plot(log_wbloan,
-            overlay = FALSE) +
-  geom_line(mapping=aes(y=log_cloan),data=figure1.2_data)
+figure1.1<-panel_data(data,id=country,wave=year) %>% #to use with line_plot()
+  subset(country %in% c("Algeria","Angola","Benin","Botswana","Burundi",
+                        "Burkina Faso","Cabo Verde","Cameroon",
+                        "Central African Republic","Chad","Comoros",
+                        "Cote d'Ivoire","Democratic Republic of the Congo",
+                        "Djibouti","Egypt","Equatorial Guinea","Eritrea",
+                        "Eswatini","Ethiopia","Gabon","Gambia","Ghana","Guinea",
+                        "Guinea-Bissau","Kenya","Lesotho")) %>%
+  line_plot(log_wbloan,overlay = FALSE) +
+  geom_line(mapping=aes(y=log_cloan))
+figure1.2<-panel_data(data,id=country,wave=year) %>% #to use with line_plot()
+  subset(country %in% c("Liberia","Libya","Madagascar","Malawi","Mali",
+                        "Mauritania","Somalia","Mauritius","Morocco",
+                        "Mozambique","Namibia","Niger","Nigeria",
+                        "Republic of the Congo","Rwanda","Senegal",
+                        "Sierra Leone","South Africa","Togo","Tunisia","Uganda",
+                        "Seychelles","South Sudan","Sudan",
+                        "Sao Tome and Principe","Tanzania","Zambia","Zimbabwe")) %>%
+  line_plot(log_wbloan,overlay = FALSE) +
+  geom_line(mapping=aes(y=log_cloan))
+#type "figure1._" in console, use 1700 width and 1200 height for export
 ################################################################################
 #figure 2
 figure2.1<-data %>%
-  drop_na() %>%
+  select(year,conditions) %>%
+  drop_na() %>% #na's from UNGA voting data distorts graph if this is done too early
   group_by(year) %>%
   summarise(conditions=sum(conditions)) %>% #sum of every country's avg conditions per project in a given year
   select(-year) %>%
   ts(.,start = 2004,end = 2017)
-#plot.ts() #use console and set width 550 for these, height 500 for export
-figure2.2<-data %>%
+figure2.2<-china %>% #using full sample of Chinese data (2000-2017), nominal dollars
+  drop_na %>%
   group_by(year) %>%
-  summarise(log_cloan=sum(log_cloan)) %>%
+  summarise(cloan=sum(cloan)) %>%
   select(-year) %>%
-  ts(.,start = 2004,end = 2017)
+  ts(.,start = 2000,end = 2017)
 figure2.3<-data %>%
   group_by(year) %>%
   summarise(log_wbloan=sum(log_wbloan)) %>%
   select(-year) %>%
   ts(.,start = 2004,end = 2017)
+#type "plot.ts(figure2._)" in console, use width 550 and height 500 for export
 ```
 
 <!-- Conducting empirical analysis. -->
