@@ -63,6 +63,8 @@ africa<-{
 
 <!-- Cleaning data. -->
 ```{r cleaning, message=FALSE, warning=FALSE, include=FALSE}
+figure2.2<-china #stashing uncleaned data for figure making, will be overwritten by figure code
+figure2.3<-wb
 #for some reason I find country codes unreliable, so here I am declaring the
 #names of all African countries to use in future subsetting
 african_countries<-c("Algeria","Angola","Benin","Botswana","Burkina Faso",
@@ -196,6 +198,17 @@ data<-full_join(ucdp, polity, by = c("country","year")) %>%
 data["cloan"][is.na(data["cloan"])] <- 0 #assuming didn't receive loans if NA
 data["wbloan"][is.na(data["wbloan"])] <- 0 #assuming didn't receive loans if NA
 data["conflicts"][is.na(data["conflicts"])] <- 0 #assuming no conflict if NA
+#impute missingness for `conditions` (using average of yearly averages across all countries)
+#data["conditions"][is.na(data["conditions"])] <-{
+#  data %>%
+#    select(year,conditions) %>%
+#    drop_na() %>%
+#    group_by(year) %>%
+#    summarise(conditions=mean(conditions)) %>%
+#    ungroup() %>%
+#    summarise(conditions=mean(conditions)) %>%
+#    as.integer()
+#}
 ################################################################################
 #rebasing loan data to real 2015 US $
 deflator<- deflator %>%
@@ -227,6 +240,8 @@ data<-data %>%
 africa<-africa %>%
   rename(country=`ADM0_NAME`)%>%
   subset(country %in% african_countries)
+################################################################################
+#writing final dataset
 ```
 
 <!-- Making figures. -->
@@ -262,23 +277,145 @@ figure2.1<-data %>%
   summarise(conditions=sum(conditions)) %>% #sum of every country's avg conditions per project in a given year
   select(-year) %>%
   ts(.,start = 2004,end = 2017)
-figure2.2<-china %>% #using full sample of Chinese data (2000-2017), nominal dollars
-  drop_na %>%
+figure2.2<-figure2.2 %>% #using full sample of Chinese data (2000-2017), nominal dollars
+  rename(country=`Recipient`,year=`Commitment Year`) %>% #chose commitment year as `year`, maybe controversial
+  subset(country %in% african_countries) %>%
+  filter(`Flow Type`=="Loan") %>%
+  select(year,`Amount (Constant USD2017)`) %>%
+  drop_na() %>%
   group_by(year) %>%
-  summarise(cloan=sum(cloan)) %>%
+  summarise(cloan=sum(`Amount (Constant USD2017)`)) %>% #constant USD 2015 in cleaned dataset above
   select(-year) %>%
   ts(.,start = 2000,end = 2017)
-figure2.3<-data %>%
+figure2.3<-figure2.3 %>%
+  pivot_longer("1960":"2021", names_to = "year", values_to = "wbloan") %>%
+  rename(country=`Country Name`) %>%
+  subset(country %in% african_countries) %>%
+  select(year,wbloan) %>%
+  filter(year > "1999" & year < "2018") %>%
+  drop_na() %>%
+  transform(year=as.numeric(year)) %>%
   group_by(year) %>%
-  summarise(log_wbloan=sum(log_wbloan)) %>%
+  summarise(wbloan=sum(wbloan)) %>%
   select(-year) %>%
-  ts(.,start = 2004,end = 2017)
-#type "plot.ts(figure2._)" in console, use width 550 and height 500 for export
+  ts(.,start = 2000,end = 2017)
+#type "plot.ts(figure2._,ylim=c(0,8e+10))" in console, use width 550 and height 500 for export
 ```
 
-<!-- Conducting empirical analysis. -->
-```{r analysis}
+<!-- Conducting diagnostics. -->
+```{r diagnostics}
 ################################################################################
-#panel data frame, panel unit root testing
-pdata<-pdata.frame(data,index = c("country","year"))
+#panel unit root testing
+##conflict
+purtest(
+  object={
+    data %>%
+      select(country,year,conflicts) %>%
+      drop_na() %>%
+      pdata.frame(index = c("country","year")) %>%
+      select(conflicts)
+  },
+  test = "invnormal"
+)
+##polity
+purtest(
+  object={
+    data %>%
+      select(country,year,polity) %>%
+      drop_na() %>%
+      pdata.frame(index = c("country","year")) %>%
+      select(polity)
+  },
+  test = "invnormal"
+)
+##emissions
+purtest(
+  object={
+    data %>%
+      select(country,year,emissions) %>%
+      drop_na() %>%
+      pdata.frame(index = c("country","year")) %>%
+      select(emissions)
+  },
+  test = "invnormal"
+)
+##conditions
+purtest(
+  object={
+    data %>%
+      select(country,year,conditions) %>%
+      drop_na() %>%
+      pdata.frame(index = c("country","year")) %>%
+      select(conditions)
+  },
+  test = "invnormal"
+)
+##lag_cvote
+purtest(
+  object={
+    data %>%
+      select(country,year,lag_cvote) %>%
+      drop_na() %>%
+      pdata.frame(index = c("country","year")) %>%
+      select(lag_cvote)
+  },
+  test = "invnormal"
+)
+##lag_usvote
+purtest(
+  object={
+    data %>%
+      select(country,year,lag_usvote) %>%
+      drop_na() %>%
+      pdata.frame(index = c("country","year")) %>%
+      select(lag_usvote)
+  },
+  test = "invnormal"
+)
+##log_cloan
+purtest(
+  object={
+    data %>%
+      select(country,year,log_cloan) %>%
+      drop_na() %>%
+      pdata.frame(index = c("country","year")) %>%
+      select(log_cloan)
+  },
+  test = "invnormal"
+)
+##log_wbloan
+purtest(
+  object={
+    data %>%
+      select(country,year,log_wbloan) %>%
+      drop_na() %>%
+      pdata.frame(index = c("country","year")) %>%
+      select(log_wbloan)
+  },
+  test = "invnormal"
+)
+##log_gdp
+purtest(
+  object={
+    data %>%
+      select(country,year,log_gdp) %>%
+      drop_na() %>%
+      pdata.frame(index = c("country","year")) %>%
+      select(log_gdp)
+  },
+  test = "invnormal"
+)
+##total
+purtest(
+  object={
+    data %>%
+      select(country,year,total) %>%
+      drop_na() %>%
+      pdata.frame(index = c("country","year")) %>%
+      select(total)
+  },
+  test = "invnormal"
+)
+################################################################################
+#spatial/temporal, etc.
 ```
