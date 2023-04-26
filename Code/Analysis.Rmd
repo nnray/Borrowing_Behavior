@@ -7,7 +7,8 @@ output: html_document
 <!-- Loading relevant libraries. -->
 ```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
 library(here);library(plm);library(sandwich);library(gridExtra);library(readxl);
-library(panelr);library(stargazer);library(readstata13);library(tidyverse)
+library(sf);library(sfExtras);library(tmap);library(tmaptools);library(panelr);
+library(stargazer);library(readstata13);library(tidyverse)
 ```
 
 <!-- Loading relevant data. -->
@@ -40,8 +41,9 @@ polity<-read_excel(
   here("data","politics","p5v2018.xls")
   )
 voting<-read.dta13(
-  here("data","politics","Apples_and_Dragonfruits_Replication_Data","dragon_fruits.dta"),
-)
+  here("data","politics","Apples_and_Dragonfruits_Replication_Data",
+       "dragon_fruits.dta")
+  )
 #conflict
 ucdp<-read_xlsx(
   unzip(here("data","conflict","ucdp-prio-acd-221-xlsx.zip"))
@@ -51,7 +53,12 @@ emissions<-read.csv(
   unzip(here("data","climate",
              "P_Data_Extract_From_World_Development_Indicators.zip"),
         "f9f2f018-84e3-4634-9d43-156d9e836b14_Data.csv")
-)
+  )
+#shapefiles
+africa<-{
+  unzip(here("data","shapefiles","afr_g2014_2013_0.zip"))
+  st_read(here("code","afr_g2014_2013_0.shp"))
+}
 ```
 
 <!-- Cleaning data. -->
@@ -203,25 +210,30 @@ data$cloan<-diag(data$cloan) %*% deflator
 data$wbloan<-diag(data$wbloan) %*% deflator
 ################################################################################
 #after rebasing, some data manipulation:
-#logging financial data for easier comparison
+##logging financial data for easier comparison
 data<-data %>%
   mutate(log_cloan=log(cloan),log_wbloan=log(wbloan),
          log_gdp=log(gdp))
 data["log_cloan"][data["log_cloan"] == -Inf] <- 0
 data["log_wbloan"][data["log_wbloan"] == -Inf] <- 0
-#creating DV for first model
+##creating DV for first model
 data<-data %>%
   group_by(country,year) %>%
   mutate(total=log_cloan+log_wbloan)
-#creating desired lags
-#
+################################################################################
+#creating lags
+##temporal lags
+##spatial lags
+africa<-africa %>%
+  rename(country=`ADM0_NAME`)%>%
+  subset(country %in% african_countries)
 ```
 
 <!-- Making figures. -->
 ```{r figures, include=FALSE,warning=FALSE,message=FALSE}
 #figure 1
 figure1.1_data<-panel_data(data,id=country,wave=year) %>% #to use with line_plot()
-  subset(`country` %in% c("Algeria","Angola","Benin","Botswana",
+  subset(country %in% c("Algeria","Angola","Benin","Botswana",
                                         "Burundi","Burkina Faso","Cabo Verde",
                                         "Cameroon","Central African Republic",
                                         "Chad","Comoros","Cote d'Ivoire",
@@ -235,7 +247,7 @@ figure1.1<-figure1.1_data %>% #using 1700 width, 1200 height for export
             overlay = FALSE) +
   geom_line(mapping=aes(y=log_cloan),data=figure1.1_data)
 figure1.2_data<-panel_data(data,id=country,wave=year) %>%
-  subset(`country` %in% c("Liberia","Libya",
+  subset(country %in% c("Liberia","Libya",
                                         "Madagascar","Malawi","Mali","Mauritania",
                                         "Somalia","Mauritius","Morocco",
                                         "Mozambique","Namibia","Niger","Nigeria",
@@ -270,7 +282,7 @@ figure2.3<-data %>%
 ```
 
 <!-- Conducting empirical analysis. -->
-```{r eval=FALSE, include=FALSE}
+```{r analysis}
 ################################################################################
 #panel data frame, panel unit root testing
 pdata<-pdata.frame(data,index = c("country","year"))
