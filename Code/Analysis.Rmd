@@ -186,6 +186,16 @@ emissions<-emissions %>%
   filter("2003"<year & year<"2018") %>%
   subset(country %in% african_countries)
 ################################################################################
+#cleaning shapefile for later use
+africa["ADM0_NAME"][[1]][africa["ADM0_NAME"][[1]]=="United Republic of Tanzania"]<-"Tanzania"
+africa["ADM0_NAME"][[1]][africa["ADM0_NAME"][[1]]=="Congo"]<-"Republic of the Congo"
+africa["ADM0_NAME"][[1]][africa["ADM0_NAME"][[1]]=="Côte d'Ivoire"]<-"Cote d'Ivoire"
+africa["ADM0_NAME"][[1]][africa["ADM0_NAME"][[1]]=="Swaziland"]<-"Eswatini"
+africa["ADM0_NAME"][[1]][africa["ADM0_NAME"][[1]]=="Cape Verde"]<-"Cabo Verde"
+africa<-africa %>%
+  rename(country=`ADM0_NAME`)%>%
+  subset(country %in% african_countries)
+################################################################################
 #creating dataset
 data<-full_join(ucdp, polity, by = c("country","year")) %>%
   full_join(., emissions, by = c("country","year")) %>%
@@ -233,15 +243,6 @@ data["log_wbloan"][data["log_wbloan"] == -Inf] <- 0
 data<-data %>%
   group_by(country,year) %>%
   mutate(total=log_cloan+log_wbloan)
-################################################################################
-#creating lags
-##temporal lags
-##spatial lags
-africa<-africa %>%
-  rename(country=`ADM0_NAME`)%>%
-  subset(country %in% african_countries)
-################################################################################
-#writing final dataset
 ```
 
 <!-- Making figures. -->
@@ -416,8 +417,12 @@ purtest(
   },
   test = "invnormal"
 )
+#serial correlation still? acf plots?
 ################################################################################
 #spatial/temporal, etc.
+##w matrix
+w<-africa %>%
+  left_join(data,by=c("country"))
 ```
 
 <!-- Building and analyzing empirical models. -->
