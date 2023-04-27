@@ -417,9 +417,8 @@ purtest(
   },
   test = "invnormal"
 )
-#serial correlation still? acf plots?
 ################################################################################
-#spatial/temporal, etc.
+#spatial/temporal dependence diagnostics
 ##w matrix
 w<-africa %>%
   left_join(data,by=c("country"))
