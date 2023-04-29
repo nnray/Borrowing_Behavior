@@ -436,11 +436,20 @@ purtest(
 ###model 1
 borrowing<-plm(total~conditions+lag_cvote+log_gdp+polity,data,effect="time",model="pooling",index=c("country","year")) %>% summary()
 #moran.test(borrowing$residuals,)
-bgtest(borrowing)
+bgtest(borrowing) #some evidence of serial correlation, will try a LDV
+borrowing<-{
+  data %>%
+    ungroup() %>%
+    mutate(lag_total=dplyr::lag(total)) %>%
+    plm(data=.,formula=total~lag_total+conditions+lag_cvote+log_gdp+polity,effect="time",model="pooling",index=c("country","year")) %>%
+    summary()
+}
+bgtest(borrowing) #serial correlation increased...
 ###model 2
 conflict<-plm(conflicts~log_cloan+log_gdp+polity,data,effect="time",model="pooling",index=c("country","year")) %>% summary()
 ###model 3
 emissions<-plm(emissions~conditions+log_gdp,data,effect="time",model="pooling",index=c("country","year")) %>% summary()
+#missing data? slide 38, Amelia lab
 ```
 
 <!-- Building and analyzing empirical models. -->
