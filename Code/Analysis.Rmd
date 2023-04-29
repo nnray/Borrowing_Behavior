@@ -8,7 +8,7 @@ output: html_document
 ```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
 library(here);library(plm);library(sandwich);library(gridExtra);library(readxl);
 library(sf);library(sfExtras);library(tmap);library(tmaptools);library(panelr);
-library(stargazer);library(readstata13);library(tidyverse)
+library(stargazer);library(readstata13);library(spdep);library(lmtest);library(tidyverse)
 ```
 
 <!-- Loading relevant data. -->
@@ -349,6 +349,7 @@ purtest(
       pdata.frame(index = c("country","year")) %>%
       select(conditions)
   },
+  exo = "trend", #trendstationary
   test = "invnormal"
 )
 ##lag_cvote
@@ -360,6 +361,7 @@ purtest(
       pdata.frame(index = c("country","year")) %>%
       select(lag_cvote)
   },
+  exo = "trend", #trendstationary
   test = "invnormal"
 )
 ##lag_usvote
@@ -371,6 +373,7 @@ purtest(
       pdata.frame(index = c("country","year")) %>%
       select(lag_usvote)
   },
+  exo = "trend", #trendstationary
   test = "invnormal"
 )
 ##log_cloan
@@ -393,6 +396,7 @@ purtest(
       pdata.frame(index = c("country","year")) %>%
       select(log_wbloan)
   },
+  exo = "trend", #trendstationary
   test = "invnormal"
 )
 ##log_gdp
@@ -404,6 +408,7 @@ purtest(
       pdata.frame(index = c("country","year")) %>%
       select(log_gdp)
   },
+  exo = "trend", #trendstationary
   test = "invnormal"
 )
 ##total
@@ -415,18 +420,32 @@ purtest(
       pdata.frame(index = c("country","year")) %>%
       select(total)
   },
+  exo = "trend", #trendstationary
   test = "invnormal"
 )
+#conclusion: all variables at least panel trendstationary, so include period effects for detrending
 ################################################################################
 #spatial/temporal dependence diagnostics
 ##w matrix
-w<-africa %>%
-  left_join(data,by=c("country"))
+#w<-data %>%
+#  select(country,log_cloan,log_wbloan) %>%
+#  merge(africa,.,by=c("country")) %>%
+#  st_queen() %>%
+#  st_as_nb()
+##fitting "naive" model (plus period effects from panel unit root test conclusion) and checking for temporal/spatial dependence
+###model 1
+borrowing<-plm(total~conditions+lag_cvote+log_gdp+polity,data,effect="time",model="pooling",index=c("country","year")) %>% summary()
+#moran.test(borrowing$residuals,)
+bgtest(borrowing)
+###model 2
+conflict<-plm(conflicts~log_cloan+log_gdp+polity,data,effect="time",model="pooling",index=c("country","year")) %>% summary()
+###model 3
+emissions<-plm(emissions~conditions+log_gdp,data,effect="time",model="pooling",index=c("country","year")) %>% summary()
 ```
 
 <!-- Building and analyzing empirical models. -->
 ```{r analysis}
-#plm
+#final models
 ```
 
 <!-- Making tables of results. -->
