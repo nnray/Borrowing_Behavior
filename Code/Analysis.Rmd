@@ -439,25 +439,25 @@ purtest(
 #temporal/spatial dependence diagnostics
 ##fitting "naive" model (plus period effects from panel unit root test conclusion) and checking for temporal dependence
 ###model 1
-borrowing<-plm(total~lag_total+conditions+lag_cvote+log_gdp+polity,
+model1<-plm(total~lag_total+conditions+lag_cvote+log_gdp+polity,
                data,effect="time",model="pooling",index=c("country","year"))
-bptest(borrowing) #heteroskedasticity
+bptest(model1) #heteroskedasticity
+pbgtest(model1) #no serial correlation
+plmtest(model1, effect = "individual", type = c("bp")) #pooling ok
 #moran.test(borrowing$residuals,)
-pbgtest(borrowing) #no serial correlation at 0.05 significance level
-plmtest(borrowing, effect = "individual", type = c("bp")) #pooling ok
-plm:::summary.plm(borrowing, #using country clustered se
-                  vcov=vcovHC(borrowing,method=c("white1"),type=c("HC1"),cluster=c("group"))) 
+plm:::summary.plm(model1, #using country clustered se
+                  vcov=vcovHC(model1,method=c("white1"),type=c("HC1"),cluster=c("group"))) 
 ###model 2
 #will need lagsarlm instead of plm
-conflict<-plm(conflicts~lag_conflicts+conditions+log_gdp+polity,
+model2<-plm(conflicts~lag_conflicts+conditions+log_gdp+polity,
               data,effect="time",model="pooling",index=c("country","year"))
-bptest(conflict) #heteroskedasticity
-bgtest(conflict) #serial correlation
+bptest(model2) #heteroskedasticity
+pbgtest(model2) #serial correlation
 ###model 3
-emissions<-plm(emissions~lag_emissions+log_cloan+lag_log_cloan+log_gdp,
+model3<-plm(emissions~lag_emissions+log_cloan+lag_log_cloan+log_gdp,
                data,effect="time",model="pooling",index=c("country","year"))
-bptest(emissions) #heteroskedasticity
-bgtest(emissions) #serial correlation
+bptest(model3) #heteroskedasticity
+bgtest(model3) #serial correlation
 ################################################################################
 #missing data? slide 38, Amelia lab
 ```
