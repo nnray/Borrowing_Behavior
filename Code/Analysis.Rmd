@@ -9,7 +9,7 @@ output: html_document
 library(here);library(plm);library(sandwich);library(gridExtra);library(readxl);
 library(sf);library(sfExtras);library(tmap);library(tmaptools);library(panelr);
 library(stargazer);library(readstata13);library(spdep);library(lmtest);
-library(spatialreg);library(tscsdep);library(tidyverse)
+library(splm);library(spatialreg);library(tidyverse)
 ```
 
 <!-- Loading relevant data. -->
@@ -317,8 +317,8 @@ figure2.3<-figure2.3 %>%
 #type "plot.ts(figure2._,ylim=c(0,8e+10))" in console, use width 550 and height 500 for export
 ```
 
-<!-- Conducting diagnostics. -->
-```{r diagnostics}
+<!-- Conducting analysis, including diagnostics and final models. -->
+```{r analysis, message=FALSE, warning=FALSE, include=FALSE}
 ################################################################################
 #panel unit root testing
 ##conflict
@@ -448,7 +448,7 @@ bptest(model1) #heteroskedasticity
 pbgtest(model1) #no serial correlation
 plmtest(model1, effect = "individual", type = c("bp")) #pooling ok
 w<-nb2listw(w,style="W",zero.policy = TRUE)
-#moran.test(model1$residuals,w)
+#GWPR.light::GWPR.moran.test(model1, w) if balanced
 ###model 2
 model2<-lagsarlm(conflicts~lag_conflicts+conditions+log_gdp+polity+as.factor(year),
                  data=data,w,Durbin=~log_gdp+polity,zero.policy = TRUE)
@@ -467,13 +467,8 @@ bptest.Sarlm(model3) #heteroskedasticity
 #missing data? slide 38, Amelia lab
 ```
 
-<!-- Building and analyzing empirical models. -->
-```{r analysis}
-#final models
-```
-
 <!-- Making tables of results. -->
-```{r tables}
+```{r tables, message=FALSE, warning=FALSE, include=FALSE}
 se<-vcovHC(model1,method=c("white1"),type=c("HC1"),cluster=c("group"))
 stargazer(model1,se = list(NULL, se))
 summary(model2) %>%
