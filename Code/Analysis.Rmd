@@ -9,7 +9,7 @@ output: html_document
 library(here);library(plm);library(sandwich);library(gridExtra);library(readxl);
 library(sf);library(sfExtras);library(tmap);library(tmaptools);library(panelr);
 library(stargazer);library(readstata13);library(spdep);library(lmtest);
-library(spatialreg);library(tidyverse)
+library(spatialreg);library(splm);library(tidyverse)
 ```
 
 <!-- Loading relevant data. -->
@@ -251,9 +251,12 @@ data<-data %>%
   ungroup() %>%
   mutate(lag_total=dplyr::lag(total),lag_conflicts=dplyr::lag(conflicts),
          lag_emissions=dplyr::lag(emissions),lag_log_cloan=dplyr::lag(log_cloan))
-##w matrix
-w<-merge(africa,data,by=c("country"))
-#w<-st_queen(w)
+##w matrix for spatial lags later (under "analysis")
+w<-merge(africa,data,by=c("country")) %>%
+  st_queen() %>%
+  st_as_nb() %>%
+  write.nb.gal(.,here(file = "w"))
+w2<-read.gal(here("w"))
 ```
 
 <!-- Making figures. -->
@@ -437,27 +440,33 @@ purtest(
 #conclusion: all variables at least panel trendstationary, so include period effects for detrending
 ################################################################################
 #temporal/spatial dependence diagnostics
-##fitting "naive" model (plus period effects from panel unit root test conclusion) and checking for temporal dependence
+##fitting theoretical model (with theoretically motivated temporal/spatial lags) plus period effects from panel unit root test conclusion and checking for heteroskedasticity, serial correlation, unit effects, and unmodeled spatial dependence in residuals
 ###model 1
 model1<-plm(total~lag_total+conditions+lag_cvote+log_gdp+polity,
                data,effect="time",model="pooling",index=c("country","year"))
 bptest(model1) #heteroskedasticity
 pbgtest(model1) #no serial correlation
 plmtest(model1, effect = "individual", type = c("bp")) #pooling ok
-#moran.test(borrowing$residuals,)
+w<-nb2listw(w$neighbours,style="W")
+moran.test(summary(model1)$residuals,w)
 plm:::summary.plm(model1, #using country clustered se
                   vcov=vcovHC(model1,method=c("white1"),type=c("HC1"),cluster=c("group"))) 
 ###model 2
-#will need lagsarlm instead of plm
-model2<-plm(conflicts~lag_conflicts+conditions+log_gdp+polity,
-              data,effect="time",model="pooling",index=c("country","year"))
-bptest(model2) #heteroskedasticity
-pbgtest(model2) #serial correlation
+library(devtools); devtools::install_github("judechays/STADL", dependencies = TRUE)
+library(tscsdep)
+model2<-lagsarlm(conflicts~lag_conflicts+conditions+log_gdp+polity+as.factor(year),
+                 data=data,w,Durbin=~conflicts+log_gdp+polity)
+bptest(model2) #
+pbgtest(model2) #
+plmtest(model2, effect = "individual", type = c("bp")) #
+moran.test(summary(model2)$residuals,w)
 ###model 3
-model3<-plm(emissions~lag_emissions+log_cloan+lag_log_cloan+log_gdp,
-               data,effect="time",model="pooling",index=c("country","year"))
-bptest(model3) #heteroskedasticity
-bgtest(model3) #serial correlation
+model3<-lagsarlm(emissions~lag_emissions+log_cloan+lag_log_cloan+log_gdp+as.factor(year),
+                 data=data,w,Durbin=~emissions+log_gdp)
+bptest(model3) #
+pbgtest(model3) #
+plmtest(model3, effect = "individual", type = c("bp")) #
+moran.test(summary(model3)$residuals,w)
 ################################################################################
 #missing data? slide 38, Amelia lab
 ```
@@ -468,22 +477,21 @@ Theoretical spatial/temporal dependence (temporal LDV)
 Fixed effects (no FE)
 Heteroskedasticity (country clustered)
 Serial Correlation (none)
-Spatial dependence in residuals (?)
+*Spatial dependence in residuals (?)
 
 Model 2:
 Theoretical spatial/temporal dependence (temporal LDV, possibly spatial LDV, possibly spatial X (gdp, polity))
-Fixed effects
-Heteroskedasticity
-Serial Correlation
-Spatial dependence in residuals
+*Fixed effects
+*Heteroskedasticity
+*Serial Correlation
+*Spatial dependence in residuals
 
 Model 3:
 Theoretical spatial/temporal dependence (temporal LDV; possibly spatial LDV; possibly spatial X (gdp); possible temporal X (cloan)) but not spatial X, cuz one country taking Chinese money shouldn't affect the conditions and effectiveness of WB in other countries
-Fixed effects
-Heteroskedasticity
-Serial Correlation
-Spatial dependence in residuals
-*Take polity out?
+*Fixed effects
+*Heteroskedasticity
+*Serial Correlation
+*Spatial dependence in residuals
 <!-- Building and analyzing empirical models. -->
 ```{r analysis}
 #final models
