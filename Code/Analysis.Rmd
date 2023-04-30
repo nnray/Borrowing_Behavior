@@ -9,7 +9,7 @@ output: html_document
 library(here);library(plm);library(sandwich);library(gridExtra);library(readxl);
 library(sf);library(sfExtras);library(tmap);library(tmaptools);library(panelr);
 library(stargazer);library(readstata13);library(spdep);library(lmtest);
-library(tidyverse)
+library(spatialreg);library(tidyverse)
 ```
 
 <!-- Loading relevant data. -->
@@ -253,7 +253,7 @@ data<-data %>%
          lag_emissions=dplyr::lag(emissions),lag_log_cloan=dplyr::lag(log_cloan))
 ##w matrix
 w<-merge(africa,data,by=c("country"))
-w<-st_queen(w)
+#w<-st_queen(w)
 ```
 
 <!-- Making figures. -->
@@ -452,34 +452,22 @@ conflict<-plm(conflicts~conditions+log_gdp+polity,
               data,effect="time",model="pooling",index=c("country","year"))
 bptest(conflict) #heteroskedasticity
 bgtest(conflict) #serial correlation
-conflict<-{#trying LDV
-  data %>%
-    ungroup() %>%
-    mutate(lag_conflicts=dplyr::lag(conflicts)) %>%
-    plm(data=.,formula=conflicts~lag_conflicts+conditions+log_gdp+polity,
-        effect="time",model="pooling",index=c("country","year"))
-}
-bptest(conflict) #heteroskedasticity
-bgtest(conflict) #serial correlation
-#fgls?
 ###model 3
-emissions<-plm(emissions~log_cloan+log_gdp+polity,
+emissions<-plm(emissions~log_cloan+log_gdp,
                data,effect="time",model="pooling",index=c("country","year"))
 bptest(emissions) #heteroskedasticity
 bgtest(emissions) #serial correlation
-#missing data? slide 38, Amelia lab
 ################################################################################
-#spatial dependence diagnostics
-
+#missing data? slide 38, Amelia lab
 ```
 
 
 Model 1:
 Theoretical spatial/temporal dependence (temporal LDV)
-Fixed effects (if no FE, we're good with robust, if FE, arrellano-bond)
-Heteroskedasticity (done without FE;country clustered)
+Fixed effects (no FE)
+Heteroskedasticity (country clustered)
 Serial Correlation (none)
-Spatial dependence in residuals
+Spatial dependence in residuals (?)
 
 Model 2:
 Theoretical spatial/temporal dependence (temporal LDV, possibly spatial LDV, possibly spatial X (gdp, polity))
