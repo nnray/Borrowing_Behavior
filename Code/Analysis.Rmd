@@ -448,12 +448,13 @@ plmtest(borrowing, effect = "individual", type = c("bp")) #pooling ok
 plm:::summary.plm(borrowing, #using country clustered se
                   vcov=vcovHC(borrowing,method=c("white1"),type=c("HC1"),cluster=c("group"))) 
 ###model 2
-conflict<-plm(conflicts~conditions+log_gdp+polity,
+#will need lagsarlm instead of plm
+conflict<-plm(conflicts~lag_conflicts+conditions+log_gdp+polity,
               data,effect="time",model="pooling",index=c("country","year"))
 bptest(conflict) #heteroskedasticity
 bgtest(conflict) #serial correlation
 ###model 3
-emissions<-plm(emissions~log_cloan+log_gdp,
+emissions<-plm(emissions~lag_emissions+log_cloan+lag_log_cloan+log_gdp,
                data,effect="time",model="pooling",index=c("country","year"))
 bptest(emissions) #heteroskedasticity
 bgtest(emissions) #serial correlation
