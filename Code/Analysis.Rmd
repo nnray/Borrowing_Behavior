@@ -8,7 +8,8 @@ output: html_document
 ```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
 library(here);library(plm);library(sandwich);library(gridExtra);library(readxl);
 library(sf);library(sfExtras);library(tmap);library(tmaptools);library(panelr);
-library(stargazer);library(readstata13);library(spdep);library(lmtest);library(tidyverse)
+library(stargazer);library(readstata13);library(spdep);library(lmtest);
+library(tidyverse)
 ```
 
 <!-- Loading relevant data. -->
@@ -243,6 +244,16 @@ data["log_wbloan"][data["log_wbloan"] == -Inf] <- 0
 data<-data %>%
   group_by(country,year) %>%
   mutate(total=log_cloan+log_wbloan)
+################################################################################
+#creating temporal/spatial lags
+##temporal lags
+data<-data %>% 
+  ungroup() %>%
+  mutate(lag_total=dplyr::lag(total),lag_conflicts=dplyr::lag(conflicts),
+         lag_emissions=dplyr::lag(emissions),lag_log_cloan=dplyr::lag(log_cloan))
+##w matrix
+w<-merge(africa,data,by=c("country"))
+w<-st_queen(w)
 ```
 
 <!-- Making figures. -->
@@ -314,7 +325,7 @@ purtest(
       select(country,year,conflicts) %>%
       drop_na() %>%
       pdata.frame(index = c("country","year")) %>%
-      select(conflicts)
+      select(conflicts) #stationary
   },
   test = "invnormal"
 )
@@ -325,7 +336,7 @@ purtest(
       select(country,year,polity) %>%
       drop_na() %>%
       pdata.frame(index = c("country","year")) %>%
-      select(polity)
+      select(polity) #stationary
   },
   test = "invnormal"
 )
@@ -336,7 +347,7 @@ purtest(
       select(country,year,emissions) %>%
       drop_na() %>%
       pdata.frame(index = c("country","year")) %>%
-      select(emissions)
+      select(emissions) #stationary
   },
   test = "invnormal"
 )
@@ -347,9 +358,9 @@ purtest(
       select(country,year,conditions) %>%
       drop_na() %>%
       pdata.frame(index = c("country","year")) %>%
-      select(conditions)
+      select(conditions) #trendstationary
   },
-  exo = "trend", #trendstationary
+  exo = "trend", 
   test = "invnormal"
 )
 ##lag_cvote
@@ -359,9 +370,9 @@ purtest(
       select(country,year,lag_cvote) %>%
       drop_na() %>%
       pdata.frame(index = c("country","year")) %>%
-      select(lag_cvote)
+      select(lag_cvote) #trendstationary
   },
-  exo = "trend", #trendstationary
+  exo = "trend",
   test = "invnormal"
 )
 ##lag_usvote
@@ -371,9 +382,9 @@ purtest(
       select(country,year,lag_usvote) %>%
       drop_na() %>%
       pdata.frame(index = c("country","year")) %>%
-      select(lag_usvote)
+      select(lag_usvote) #trendstationary
   },
-  exo = "trend", #trendstationary
+  exo = "trend",
   test = "invnormal"
 )
 ##log_cloan
@@ -383,7 +394,7 @@ purtest(
       select(country,year,log_cloan) %>%
       drop_na() %>%
       pdata.frame(index = c("country","year")) %>%
-      select(log_cloan)
+      select(log_cloan) #stationary
   },
   test = "invnormal"
 )
@@ -394,9 +405,9 @@ purtest(
       select(country,year,log_wbloan) %>%
       drop_na() %>%
       pdata.frame(index = c("country","year")) %>%
-      select(log_wbloan)
+      select(log_wbloan) #trendstationary
   },
-  exo = "trend", #trendstationary
+  exo = "trend",
   test = "invnormal"
 )
 ##log_gdp
@@ -406,9 +417,9 @@ purtest(
       select(country,year,log_gdp) %>%
       drop_na() %>%
       pdata.frame(index = c("country","year")) %>%
-      select(log_gdp)
+      select(log_gdp) #trendstationary
   },
-  exo = "trend", #trendstationary
+  exo = "trend",
   test = "invnormal"
 )
 ##total
@@ -418,40 +429,72 @@ purtest(
       select(country,year,total) %>%
       drop_na() %>%
       pdata.frame(index = c("country","year")) %>%
-      select(total)
+      select(total) #trendstationary
   },
-  exo = "trend", #trendstationary
+  exo = "trend",
   test = "invnormal"
 )
 #conclusion: all variables at least panel trendstationary, so include period effects for detrending
 ################################################################################
-#spatial/temporal dependence diagnostics
-##w matrix
-#w<-data %>%
-#  select(country,log_cloan,log_wbloan) %>%
-#  merge(africa,.,by=c("country")) %>%
-#  st_queen() %>%
-#  st_as_nb()
-##fitting "naive" model (plus period effects from panel unit root test conclusion) and checking for temporal/spatial dependence
+#temporal/spatial dependence diagnostics
+##fitting "naive" model (plus period effects from panel unit root test conclusion) and checking for temporal dependence
 ###model 1
-borrowing<-plm(total~conditions+lag_cvote+log_gdp+polity,data,effect="time",model="pooling",index=c("country","year")) %>% summary()
+borrowing<-plm(total~lag_total+conditions+lag_cvote+log_gdp+polity,
+               data,effect="time",model="pooling",index=c("country","year"))
+bptest(borrowing) #heteroskedasticity
 #moran.test(borrowing$residuals,)
-bgtest(borrowing) #some evidence of serial correlation, will try a LDV
-borrowing<-{
+pbgtest(borrowing) #no serial correlation at 0.05 significance level
+plmtest(borrowing, effect = "individual", type = c("bp")) #pooling ok
+plm:::summary.plm(borrowing, #using country clustered se
+                  vcov=vcovHC(borrowing,method=c("white1"),type=c("HC1"),cluster=c("group"))) 
+###model 2
+conflict<-plm(conflicts~conditions+log_gdp+polity,
+              data,effect="time",model="pooling",index=c("country","year"))
+bptest(conflict) #heteroskedasticity
+bgtest(conflict) #serial correlation
+conflict<-{#trying LDV
   data %>%
     ungroup() %>%
-    mutate(lag_total=dplyr::lag(total)) %>%
-    plm(data=.,formula=total~lag_total+conditions+lag_cvote+log_gdp+polity,effect="time",model="pooling",index=c("country","year")) %>%
-    summary()
+    mutate(lag_conflicts=dplyr::lag(conflicts)) %>%
+    plm(data=.,formula=conflicts~lag_conflicts+conditions+log_gdp+polity,
+        effect="time",model="pooling",index=c("country","year"))
 }
-bgtest(borrowing) #serial correlation increased...
-###model 2
-conflict<-plm(conflicts~log_cloan+log_gdp+polity,data,effect="time",model="pooling",index=c("country","year")) %>% summary()
+bptest(conflict) #heteroskedasticity
+bgtest(conflict) #serial correlation
+#fgls?
 ###model 3
-emissions<-plm(emissions~conditions+log_gdp,data,effect="time",model="pooling",index=c("country","year")) %>% summary()
+emissions<-plm(emissions~log_cloan+log_gdp+polity,
+               data,effect="time",model="pooling",index=c("country","year"))
+bptest(emissions) #heteroskedasticity
+bgtest(emissions) #serial correlation
 #missing data? slide 38, Amelia lab
+################################################################################
+#spatial dependence diagnostics
+
 ```
 
+
+Model 1:
+Theoretical spatial/temporal dependence (temporal LDV)
+Fixed effects (if no FE, we're good with robust, if FE, arrellano-bond)
+Heteroskedasticity (done without FE;country clustered)
+Serial Correlation (none)
+Spatial dependence in residuals
+
+Model 2:
+Theoretical spatial/temporal dependence (temporal LDV, possibly spatial LDV, possibly spatial X (gdp, polity))
+Fixed effects
+Heteroskedasticity
+Serial Correlation
+Spatial dependence in residuals
+
+Model 3:
+Theoretical spatial/temporal dependence (temporal LDV; possibly spatial LDV; possibly spatial X (gdp); possible temporal X (cloan)) but not spatial X, cuz one country taking Chinese money shouldn't affect the conditions and effectiveness of WB in other countries
+Fixed effects
+Heteroskedasticity
+Serial Correlation
+Spatial dependence in residuals
+*Take polity out?
 <!-- Building and analyzing empirical models. -->
 ```{r analysis}
 #final models
