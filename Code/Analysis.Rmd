@@ -8,8 +8,8 @@ output: html_document
 ```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
 library(here);library(plm);library(sandwich);library(gridExtra);library(readxl);
 library(sf);library(sfExtras);library(tmap);library(tmaptools);library(panelr);
-library(stargazer);library(readstata13);library(spdep);library(lmtest);
-library(splm);library(spatialreg);library(tidyverse)
+library(stargazer);library(readstata13);library(spdep);library(lmtest);library(splm);
+library(spatialreg);library(Amelia);library(broom);library(tidyverse)
 ```
 
 <!-- Loading relevant data. -->
@@ -251,6 +251,50 @@ data<-data %>%
   ungroup() %>%
   mutate(lag_total=dplyr::lag(total),lag_conflicts=dplyr::lag(conflicts),
          lag_emissions=dplyr::lag(emissions),lag_log_cloan=dplyr::lag(log_cloan))
+################################################################################
+#missing data
+a<-{
+  data %>%
+  select(country,year,total,lag_total,conflicts,emissions,conditions,cloan,log_cloan,gdp,log_gdp,polity,lag_cvote) %>%
+  as.data.frame() %>%
+  amelia(.,m=5,ts="year",cs="country")
+}
+all_imputations<-bind_rows(unclass(a$imputations),.id ="m") %>%
+  group_by(m) %>%
+  nest()
+models_imputations <- all_imputations %>%
+  mutate(model = data %>% map(~ plm(total~lag_total+conditions+lag_cvote+log_gdp+polity,
+               data=.,effect="time",model="pooling",index=c("country","year"))),
+         tidied = model %>% map(~ tidy(., conf.int = TRUE)),
+         glance = model %>% map(~ glance(.)))
+params <- models_imputations %>%
+  unnest(tidied) %>%
+  select(m, term, estimate, std.error) %>%
+  gather(key, value, estimate, std.error) %>%
+  spread(term, value) %>% 
+  ungroup()
+just_coefs <- params %>%
+  filter(key == "estimate") %>%
+  select(-m, -key)
+just_ses <- params %>%
+  filter(key == "std.error") %>%
+  select(-m, -key)
+coefs_melded <- mi.meld(just_coefs, just_ses)
+model_degree_freedom <- models_imputations %>%
+  unnest(glance) %>%
+  filter(m == "imp1") %>%
+  pull(df.residual)
+melded_summary <- as.data.frame(cbind(t(coefs_melded$q.mi),
+                                      t(coefs_melded$se.mi))) %>%
+  magrittr::set_colnames(c("estimate", "std.error")) %>%
+  mutate(term = rownames(.)) %>%
+  select(term, everything()) %>%
+  mutate(statistic = estimate / std.error,
+         conf.low = estimate + std.error * qt(0.025, model_degree_freedom),
+         conf.high = estimate + std.error * qt(0.975, model_degree_freedom),
+         p.value = 2 * pt(abs(statistic), model_degree_freedom, lower.tail = FALSE))
+melded_summary #model 1 from imputed data
+################################################################################
 ##w matrix for spatial lags later (under "analysis")
 #w<-merge(africa,data,by=c("country")) %>%
 #  st_queen() %>%
@@ -463,8 +507,6 @@ bptest.Sarlm(model3) #heteroskedasticity
 #serial correlation?
 #unit effects necessary?
 #spatial dependence in residuals?
-################################################################################
-#missing data? slide 38, Amelia lab
 ```
 
 <!-- Making tables of results. -->
