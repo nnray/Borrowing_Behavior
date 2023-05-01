@@ -244,63 +244,42 @@ data["log_wbloan"][data["log_wbloan"] == -Inf] <- 0
 data<-data %>%
   group_by(country,year) %>%
   mutate(total=log_cloan+log_wbloan)
-################################################################################
-#creating temporal/spatial lags
-##temporal lags
+#creating temporal lags
 data<-data %>% 
   ungroup() %>%
   mutate(lag_total=dplyr::lag(total),lag_conflicts=dplyr::lag(conflicts),
          lag_emissions=dplyr::lag(emissions),lag_log_cloan=dplyr::lag(log_cloan))
+```
+```{r missing}
 ################################################################################
 #missing data
-a<-{
-  data %>%
-  select(country,year,total,lag_total,conflicts,emissions,conditions,cloan,log_cloan,gdp,log_gdp,polity,lag_cvote) %>%
+##multiply imputing connectivity matrix
+set.seed(1)
+amelia<-data %>%
+  select(-log_wbloan) %>%
   as.data.frame() %>%
-  amelia(.,m=5,ts="year",cs="country")
-}
-all_imputations<-bind_rows(unclass(a$imputations),.id ="m") %>%
-  group_by(m) %>%
-  nest()
-models_imputations <- all_imputations %>%
-  mutate(model = data %>% map(~ plm(total~lag_total+conditions+lag_cvote+log_gdp+polity,
-               data=.,effect="time",model="pooling",index=c("country","year"))),
-         tidied = model %>% map(~ tidy(., conf.int = TRUE)),
-         glance = model %>% map(~ glance(.)))
-params <- models_imputations %>%
-  unnest(tidied) %>%
-  select(m, term, estimate, std.error) %>%
-  gather(key, value, estimate, std.error) %>%
-  spread(term, value) %>% 
-  ungroup()
-just_coefs <- params %>%
-  filter(key == "estimate") %>%
-  select(-m, -key)
-just_ses <- params %>%
-  filter(key == "std.error") %>%
-  select(-m, -key)
-coefs_melded <- mi.meld(just_coefs, just_ses)
-model_degree_freedom <- models_imputations %>%
-  unnest(glance) %>%
-  filter(m == "imp1") %>%
-  pull(df.residual)
-melded_summary <- as.data.frame(cbind(t(coefs_melded$q.mi),
-                                      t(coefs_melded$se.mi))) %>%
-  magrittr::set_colnames(c("estimate", "std.error")) %>%
-  mutate(term = rownames(.)) %>%
-  select(term, everything()) %>%
-  mutate(statistic = estimate / std.error,
-         conf.low = estimate + std.error * qt(0.025, model_degree_freedom),
-         conf.high = estimate + std.error * qt(0.975, model_degree_freedom),
-         p.value = 2 * pt(abs(statistic), model_degree_freedom, lower.tail = FALSE))
-melded_summary #model 1 from imputed data
-################################################################################
-##w matrix for spatial lags later (under "analysis")
-#w<-merge(africa,data,by=c("country")) %>%
+  amelia(.,5,ts="year",cs="country")
+imputed_data<-bind_rows(amelia$imputations[[1]],
+                        amelia$imputations[[2]],
+                        amelia$imputations[[3]],
+                        amelia$imputations[[4]],
+                        amelia$imputations[[5]]) %>%
+  group_by(country,year) %>%
+  summarise(conflicts=mean(conflicts),
+            polity=mean(polity),
+            emissions=mean(emissions),
+            conditions=mean(conditions),
+            lag_cvote=mean(lag_cvote),
+            log_cloan=mean(log_cloan),
+            log_gdp=mean(log_gdp),
+            total=mean(total))
+w_imputed<-merge(africa,imputed_data,by=c("country"))# %>%
 #  st_queen() %>%
 #  st_as_nb() %>%
-#  write.nb.gal(.,here(file = "w"))
-w<-read.gal(here("w"))
+#  write.nb.gal(.,here(file = "w_imputed"))
+#w_imputed<-read.gal(here("w_imputed"))
+################################################################################
+#imputed data also used later in "analysis"
 ```
 
 <!-- Making figures. -->
@@ -364,8 +343,16 @@ figure2.3<-figure2.3 %>%
 <!-- Conducting analysis, including diagnostics and final models. -->
 ```{r analysis, message=FALSE, warning=FALSE, include=FALSE}
 ################################################################################
+##w with original data
+#w<-merge(africa,data,by=c("country")) %>%
+#  st_queen() %>%
+#  st_as_nb() %>%
+#  write.nb.gal(.,here(file = "w"))
+w_og<-read.gal(here("w_og"))
+################################################################################
 #panel unit root testing
-##conflict
+##type in each variable and repeat
+###original dataset
 purtest(
   object={
     data %>%
@@ -374,116 +361,24 @@ purtest(
       pdata.frame(index = c("country","year")) %>%
       select(conflicts) #stationary
   },
+  #exo = "trend",
   test = "invnormal"
 )
-##polity
+###imputed dataset
 purtest(
   object={
-    data %>%
-      select(country,year,polity) %>%
-      drop_na() %>%
-      pdata.frame(index = c("country","year")) %>%
-      select(polity) #stationary
-  },
-  test = "invnormal"
-)
-##emissions
-purtest(
-  object={
-    data %>%
-      select(country,year,emissions) %>%
-      drop_na() %>%
-      pdata.frame(index = c("country","year")) %>%
-      select(emissions) #stationary
-  },
-  test = "invnormal"
-)
-##conditions
-purtest(
-  object={
-    data %>%
-      select(country,year,conditions) %>%
-      drop_na() %>%
-      pdata.frame(index = c("country","year")) %>%
-      select(conditions) #trendstationary
-  },
-  exo = "trend", 
-  test = "invnormal"
-)
-##lag_cvote
-purtest(
-  object={
-    data %>%
+    imputed_data %>%
       select(country,year,lag_cvote) %>%
       drop_na() %>%
       pdata.frame(index = c("country","year")) %>%
-      select(lag_cvote) #trendstationary
-  },
-  exo = "trend",
-  test = "invnormal"
-)
-##lag_usvote
-purtest(
-  object={
-    data %>%
-      select(country,year,lag_usvote) %>%
-      drop_na() %>%
-      pdata.frame(index = c("country","year")) %>%
-      select(lag_usvote) #trendstationary
-  },
-  exo = "trend",
-  test = "invnormal"
-)
-##log_cloan
-purtest(
-  object={
-    data %>%
-      select(country,year,log_cloan) %>%
-      drop_na() %>%
-      pdata.frame(index = c("country","year")) %>%
-      select(log_cloan) #stationary
-  },
-  test = "invnormal"
-)
-##log_wbloan
-purtest(
-  object={
-    data %>%
-      select(country,year,log_wbloan) %>%
-      drop_na() %>%
-      pdata.frame(index = c("country","year")) %>%
-      select(log_wbloan) #trendstationary
-  },
-  exo = "trend",
-  test = "invnormal"
-)
-##log_gdp
-purtest(
-  object={
-    data %>%
-      select(country,year,log_gdp) %>%
-      drop_na() %>%
-      pdata.frame(index = c("country","year")) %>%
-      select(log_gdp) #trendstationary
-  },
-  exo = "trend",
-  test = "invnormal"
-)
-##total
-purtest(
-  object={
-    data %>%
-      select(country,year,total) %>%
-      drop_na() %>%
-      pdata.frame(index = c("country","year")) %>%
-      select(total) #trendstationary
+      select(lag_cvote) #stationary
   },
   exo = "trend",
   test = "invnormal"
 )
 #conclusion: all variables at least panel trendstationary, so include period effects for detrending
 ################################################################################
-#temporal/spatial dependence diagnostics
+#models with original data, limited functionality (e.g., checking spatial dependence) due to missingness
 ##fitting theoretical model (with theoretically motivated temporal/spatial lags) plus period effects from panel unit root test conclusion and checking for heteroskedasticity, serial correlation, unit effects, and unmodeled spatial dependence in residuals
 ###model 1
 model1<-plm(total~lag_total+conditions+lag_cvote+log_gdp+polity,
@@ -491,22 +386,122 @@ model1<-plm(total~lag_total+conditions+lag_cvote+log_gdp+polity,
 bptest(model1) #heteroskedasticity
 pbgtest(model1) #no serial correlation
 plmtest(model1, effect = "individual", type = c("bp")) #pooling ok
-w<-nb2listw(w,style="W",zero.policy = TRUE)
-#GWPR.light::GWPR.moran.test(model1, w) if balanced
+w_og<-nb2listw(w_og,style="W",zero.policy = TRUE)
+#GWPR.light::GWPR.moran.test(model1, w_og) if balanced
 ###model 2
 model2<-lagsarlm(conflicts~lag_conflicts+conditions+log_gdp+polity+as.factor(year),
-                 data=data,w,Durbin=~log_gdp+polity,zero.policy = TRUE)
+                 data=data,w_og,Durbin=~log_gdp+polity,zero.policy = TRUE)
 bptest.Sarlm(model2) #heteroskedasticity
 #serial correlation?
 #unit effects necessary?
 #spatial dependence in residuals?
 ###model 3
 model3<-lagsarlm(emissions~lag_emissions+log_cloan+lag_log_cloan+log_gdp+as.factor(year),
-                 data=data,w,Durbin=emissions~log_gdp,zero.policy = TRUE)
+                 data=data,w_og,Durbin=~log_gdp,zero.policy = TRUE)
 bptest.Sarlm(model3) #heteroskedasticity
 #serial correlation?
 #unit effects necessary?
 #spatial dependence in residuals?
+################################################################################
+#models with imputed data
+##model 1
+all_imputations<-bind_rows(unclass(amelia$imputations),.id ="m") %>%
+  group_by(m) %>%
+  nest()
+models_imputations <- all_imputations %>%
+  mutate(model = data %>% map(~ plm(total~lag_total+conditions+lag_cvote+log_gdp+polity,
+                                    data=.,effect="time",model="pooling",index=c("country","year"))),
+         tidied = model %>% map(~ tidy(., conf.int = TRUE)),
+         glance = model %>% map(~ glance(.)))
+params <- models_imputations %>%
+  unnest(tidied) %>%
+  select(m, term, estimate, std.error) %>%
+  gather(key, value, estimate, std.error) %>%
+  spread(term, value) %>% 
+  ungroup()
+just_coefs <- params %>%
+  filter(key == "estimate") %>%
+  select(-m, -key)
+just_ses <- params %>%
+  filter(key == "std.error") %>%
+  select(-m, -key)
+coefs_melded <- mi.meld(just_coefs, just_ses)
+model_degree_freedom <- models_imputations %>%
+  unnest(glance) %>%
+  filter(m == "imp1") %>%
+  pull(df.residual)
+melded_summary1 <- as.data.frame(cbind(t(coefs_melded$q.mi),
+                                      t(coefs_melded$se.mi))) %>%
+  magrittr::set_colnames(c("estimate", "std.error")) %>%
+  mutate(term = rownames(.)) %>%
+  select(term, everything()) %>%
+  mutate(statistic = estimate / std.error,
+         conf.low = estimate + std.error * qt(0.025, model_degree_freedom),
+         conf.high = estimate + std.error * qt(0.975, model_degree_freedom),
+         p.value = 2 * pt(abs(statistic), model_degree_freedom, lower.tail = FALSE))
+melded_summary1
+
+##model 2
+models_imputations <- all_imputations %>%
+  mutate(model = data %>% map(~ lagsarlm(conflicts~lag_conflicts+conditions+log_gdp+polity+as.factor(year),
+                                         data=.,w_og,Durbin=~log_gdp+polity,zero.policy = TRUE)),
+         tidied = model %>% map(~ tidy(., conf.int = TRUE)),
+         glance = model %>% map(~ glance(.)))
+params <- models_imputations %>%
+  unnest(tidied) %>%
+  select(m, term, estimate, std.error) %>%
+  gather(key, value, estimate, std.error) %>%
+  spread(term, value) %>% 
+  ungroup()
+just_coefs <- params %>%
+  filter(key == "estimate") %>%
+  select(-m, -key)
+just_ses <- params %>%
+  filter(key == "std.error") %>%
+  select(-m, -key)
+coefs_melded <- mi.meld(just_coefs, just_ses)
+model_degree_freedom <- nrow(data)-length(just_coefs)
+melded_summary2 <- as.data.frame(cbind(t(coefs_melded$q.mi),
+                                      t(coefs_melded$se.mi))) %>%
+  magrittr::set_colnames(c("estimate", "std.error")) %>%
+  mutate(term = rownames(.)) %>%
+  select(term, everything()) %>%
+  mutate(statistic = estimate / std.error,
+         conf.low = estimate + std.error * qt(0.025, model_degree_freedom),
+         conf.high = estimate + std.error * qt(0.975, model_degree_freedom),
+         p.value = 2 * pt(abs(statistic), model_degree_freedom, lower.tail = FALSE))
+melded_summary2
+
+##model 3
+models_imputations <- all_imputations %>%
+  mutate(model = data %>% map(~ lagsarlm(emissions~lag_emissions+log_cloan+lag_log_cloan+log_gdp+as.factor(year),
+                                         data=.,w_og,Durbin=~log_gdp,zero.policy = TRUE)),
+         tidied = model %>% map(~ tidy(., conf.int = TRUE)),
+         glance = model %>% map(~ glance(.)))
+params <- models_imputations %>%
+  unnest(tidied) %>%
+  select(m, term, estimate, std.error) %>%
+  gather(key, value, estimate, std.error) %>%
+  spread(term, value) %>% 
+  ungroup()
+just_coefs <- params %>%
+  filter(key == "estimate") %>%
+  select(-m, -key)
+just_ses <- params %>%
+  filter(key == "std.error") %>%
+  select(-m, -key)
+coefs_melded <- mi.meld(just_coefs, just_ses)
+model_degree_freedom <- model_degree_freedom <- nrow(data)-length(just_coefs)
+melded_summary3 <- as.data.frame(cbind(t(coefs_melded$q.mi),
+                                      t(coefs_melded$se.mi))) %>%
+  magrittr::set_colnames(c("estimate", "std.error")) %>%
+  mutate(term = rownames(.)) %>%
+  select(term, everything()) %>%
+  mutate(statistic = estimate / std.error,
+         conf.low = estimate + std.error * qt(0.025, model_degree_freedom),
+         conf.high = estimate + std.error * qt(0.975, model_degree_freedom),
+         p.value = 2 * pt(abs(statistic), model_degree_freedom, lower.tail = FALSE))
+melded_summary3
 ```
 
 <!-- Making tables of results. -->
