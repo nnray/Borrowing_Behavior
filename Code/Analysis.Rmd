@@ -273,11 +273,11 @@ imputed_data<-bind_rows(amelia$imputations[[1]],
             log_cloan=mean(log_cloan),
             log_gdp=mean(log_gdp),
             total=mean(total))
-w_imputed<-merge(africa,imputed_data,by=c("country"))# %>%
+#w_imputed<-merge(africa,imputed_data,by=c("country")) %>%
 #  st_queen() %>%
 #  st_as_nb() %>%
 #  write.nb.gal(.,here(file = "w_imputed"))
-#w_imputed<-read.gal(here("w_imputed"))
+w_imputed<-read.gal(here("w_imputed"))
 ################################################################################
 #imputed data also used later in "analysis"
 ```
@@ -403,7 +403,8 @@ bptest.Sarlm(model3) #heteroskedasticity
 #unit effects necessary?
 #spatial dependence in residuals?
 ################################################################################
-#models with imputed data
+#models with imputed data; code heavily borrowed from
+#https://www.andrewheiss.com/blog/2018/03/07/amelia-tidy-melding/
 ##model 1
 all_imputations<-bind_rows(unclass(amelia$imputations),.id ="m") %>%
   group_by(m) %>%
@@ -442,9 +443,10 @@ melded_summary1 <- as.data.frame(cbind(t(coefs_melded$q.mi),
 melded_summary1
 
 ##model 2
+w_imputed<-nb2listw(w_imputed,style="W",zero.policy = TRUE) #for model 2 and 3
 models_imputations <- all_imputations %>%
   mutate(model = data %>% map(~ lagsarlm(conflicts~lag_conflicts+conditions+log_gdp+polity+as.factor(year),
-                                         data=.,w_og,Durbin=~log_gdp+polity,zero.policy = TRUE)),
+                                         data=.,w_imputed,Durbin=~log_gdp+polity,zero.policy = TRUE)),
          tidied = model %>% map(~ tidy(., conf.int = TRUE)),
          glance = model %>% map(~ glance(.)))
 params <- models_imputations %>%
@@ -475,7 +477,7 @@ melded_summary2
 ##model 3
 models_imputations <- all_imputations %>%
   mutate(model = data %>% map(~ lagsarlm(emissions~lag_emissions+log_cloan+lag_log_cloan+log_gdp+as.factor(year),
-                                         data=.,w_og,Durbin=~log_gdp,zero.policy = TRUE)),
+                                         data=.,w_imputed,Durbin=~log_gdp,zero.policy = TRUE)),
          tidied = model %>% map(~ tidy(., conf.int = TRUE)),
          glance = model %>% map(~ glance(.)))
 params <- models_imputations %>%
@@ -506,6 +508,8 @@ melded_summary3
 
 <!-- Making tables of results. -->
 ```{r tables, message=FALSE, warning=FALSE, include=FALSE}
+################################################################################
+#models with missing data
 se<-vcovHC(model1,method=c("white1"),type=c("HC1"),cluster=c("group"))
 stargazer(model1,se = list(NULL, se))
 summary(model2) %>%
