@@ -387,7 +387,8 @@ bptest(model1) #heteroskedasticity
 pbgtest(model1) #no serial correlation
 plmtest(model1, effect = "individual", type = c("bp")) #pooling ok
 w_og<-nb2listw(w_og,style="W",zero.policy = TRUE)
-#GWPR.light::GWPR.moran.test(model1, w_og) if balanced
+vcov1<-vcovHC(model1)
+#GWPR.light::GWPR.moran.test(model1, w_og) if balanced plm
 ###model 2
 model2<-lagsarlm(conflicts~lag_conflicts+conditions+log_gdp+polity+as.factor(year),
                  data=data,w_og,Durbin=~log_gdp+polity,zero.policy = TRUE)
@@ -480,9 +481,9 @@ models_imputed1 <- models_imputed_df1$model
 class(models_imputed1) <- "melded"
 glance(models_imputed1)
 tidy(models_imputed1)
-huxreg(model1,models_imputed1,
-       statistics = c(N = "nobs","logLik", "AIC", "m")) %>% 
-  print_screen()
+#coeftest(model1,vcov1) %>%
+huxreg(model1,models_imputed1)# %>% 
+  #quick_latex()
 ################################################################################
 #model 2
 models_imputed_df2 <- bind_rows(unclass(amelia$imputations), .id = "m") %>%
@@ -513,15 +514,15 @@ class(models_imputed2) <- "melded"
 glance(models_imputed2)
 tidy(models_imputed2)
 huxreg(model2,models_imputed2,
-       statistics = c(N = "nobs","logLik", "AIC", "m")) %>% 
-  print_screen()
+       statistics = c(N = "nobs","logLik", "AIC", "m"))# %>% 
+  #quick_latex()
 ################################################################################
 #model 3
 models_imputed_df3 <- bind_rows(unclass(amelia$imputations), .id = "m") %>%
   group_by(m) %>%
   nest() %>% 
-  mutate(model = data %>% map(~ lagsarlm(conflicts~lag_conflicts+conditions+log_gdp+polity+as.factor(year),
-                                         data=.,w_imputed,Durbin=~log_gdp+polity,zero.policy = TRUE)))
+  mutate(model = data %>% map(~ lagsarlm(emissions~lag_emissions+log_cloan+lag_log_cloan+log_gdp+as.factor(year),
+                                         data=.,w_imputed,Durbin=~log_gdp,zero.policy = TRUE)))
 # Extract the models into a vector and make it a "melded" class
 models_imputed3 <- models_imputed_df3$model
 # Without this, R won't use our custom tidy.melded() or glance.melded() functions
@@ -529,12 +530,12 @@ class(models_imputed3) <- "melded"
 glance(models_imputed3)
 tidy(models_imputed3)
 huxreg(model3,models_imputed3,
-       statistics = c(N = "nobs","logLik", "AIC", "m")) %>% 
-  print_latex()
+       statistics = c(N = "nobs","logLik", "AIC", "m"))# %>%
+  #quick_latex()
 ```
 
 <!-- Making tables of results. -->
-```{r tables, message=FALSE, warning=FALSE, include=FALSE}
+```{r tables, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 ################################################################################
 #models with missing data
 se<-vcovHC(model1,method=c("white1"),type=c("HC1"),cluster=c("group"))
@@ -543,4 +544,70 @@ summary(model2) %>%
   stargazer()
 summary(model3) %>%
   stargazer()
+```
+
+```{r descriptive, eval=FALSE, include=FALSE}
+data_missing<-data.frame(conflicts=0,
+                         polity=0.056,
+                         emissions=0.114,
+                         conditions=0.659,
+                         lag_cvote=0.381,
+                         log_cloan=0,
+                         log_gdp=0.048,
+                         total=0)
+png("data_missing.png", height =90, width = 600)
+grid.table(data_missing)
+dev.off()
+imputed_data2<-imputed_data %>%
+   group_by(country) %>%
+   summarise(conflicts_imputed=mean(conflicts),
+          polity_imputed=mean(polity),
+          emissions_imputed=mean(emissions),
+          conditions_imputed=mean(conditions),
+          lag_cvote_imputed=mean(lag_cvote),
+          log_cloan_imputed=mean(log_cloan),
+          log_gdp_imputed=mean(log_gdp),
+          total_imputed=mean(total))
+png("imputed_data.png", height =1300, width = 1200)
+grid.table(imputed_data2)
+dev.off()
+data2<-data %>%
+  group_by(country) %>%
+  summarise(conflicts=mean(conflicts,na.rm = TRUE),
+            polity=mean(polity,na.rm = TRUE),
+            emissions=mean(emissions,na.rm = TRUE),
+            conditions=mean(conditions,na.rm = TRUE),
+            lag_cvote=mean(lag_cvote,na.rm = TRUE),
+            log_cloan=mean(log_cloan,na.rm = TRUE),
+            log_gdp=mean(log_gdp,na.rm = TRUE),
+            total=mean(total,na.rm = TRUE))
+png("data.png", height =1200, width = 900)
+grid.table(data2)
+dev.off()
+imputed_data3<-imputed_data2 %>%
+   ungroup() %>%
+   summarise(conflicts_imputed=mean(conflicts_imputed),
+          polity_imputed=mean(polity_imputed),
+          emissions_imputed=mean(emissions_imputed),
+          conditions_imputed=mean(conditions_imputed),
+          lag_cvote_imputed=mean(lag_cvote_imputed),
+          log_cloan_imputed=mean(log_cloan_imputed),
+          log_gdp_imputed=mean(log_gdp_imputed),
+          total_imputed=mean(total_imputed))
+png("imputed_data_average.png", height =90, width = 1050)
+grid.table(imputed_data3)
+dev.off()
+data3<-data2 %>%
+  ungroup() %>%
+  summarise(conflicts=mean(conflicts,na.rm = TRUE),
+            polity=mean(polity,na.rm = TRUE),
+            emissions=mean(emissions,na.rm = TRUE),
+            conditions=mean(conditions,na.rm = TRUE),
+            lag_cvote=mean(lag_cvote,na.rm = TRUE),
+            log_cloan=mean(log_cloan,na.rm = TRUE),
+            log_gdp=mean(log_gdp,na.rm = TRUE),
+            total=mean(total,na.rm = TRUE))
+png("data_average.png",height =90, width = 1025)
+grid.table(data3)
+dev.off()
 ```
