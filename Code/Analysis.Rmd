@@ -555,59 +555,59 @@ data_missing<-data.frame(conflicts=0,
                          log_cloan=0,
                          log_gdp=0.048,
                          total=0)
-png("data_missing.png", height =90, width = 600)
+png("data_missing.png", height =70, width = 500)
 grid.table(data_missing)
 dev.off()
 imputed_data2<-imputed_data %>%
    group_by(country) %>%
-   summarise(conflicts_imputed=mean(conflicts),
-          polity_imputed=mean(polity),
-          emissions_imputed=mean(emissions),
-          conditions_imputed=mean(conditions),
-          lag_cvote_imputed=mean(lag_cvote),
-          log_cloan_imputed=mean(log_cloan),
-          log_gdp_imputed=mean(log_gdp),
-          total_imputed=mean(total))
-png("imputed_data.png", height =1300, width = 1200)
+   summarise(conflicts_imputed=round(mean(conflicts),1),
+          polity_imputed=round(mean(polity),1),
+          emissions_imputed=round(mean(emissions),1),
+          conditions_imputed=round(mean(conditions),1),
+          lag_cvote_imputed=round(mean(lag_cvote),1),
+          log_cloan_imputed=round(mean(log_cloan),1),
+          log_gdp_imputed=round(mean(log_gdp),1),
+          total_imputed=round(mean(total),1))
+png("imputed_data.png", height =1200, width = 1150)
 grid.table(imputed_data2)
 dev.off()
 data2<-data %>%
   group_by(country) %>%
-  summarise(conflicts=mean(conflicts,na.rm = TRUE),
-            polity=mean(polity,na.rm = TRUE),
-            emissions=mean(emissions,na.rm = TRUE),
-            conditions=mean(conditions,na.rm = TRUE),
-            lag_cvote=mean(lag_cvote,na.rm = TRUE),
-            log_cloan=mean(log_cloan,na.rm = TRUE),
-            log_gdp=mean(log_gdp,na.rm = TRUE),
-            total=mean(total,na.rm = TRUE))
-png("data.png", height =1200, width = 900)
+  summarise(conflicts=round(mean(conflicts,na.rm = TRUE),1),
+            polity=round(mean(polity,na.rm = TRUE),1),
+            emissions=round(mean(emissions,na.rm = TRUE),1),
+            conditions=round(mean(conditions,na.rm = TRUE),1),
+            lag_cvote=round(mean(lag_cvote,na.rm = TRUE),1),
+            log_cloan=round(mean(log_cloan,na.rm = TRUE),1),
+            log_gdp=round(mean(log_gdp,na.rm = TRUE),1),
+            total=round(mean(total,na.rm = TRUE),1))
+png("data.png", height =1200, width = 750)
 grid.table(data2)
 dev.off()
 imputed_data3<-imputed_data2 %>%
    ungroup() %>%
-   summarise(conflicts_imputed=mean(conflicts_imputed),
-          polity_imputed=mean(polity_imputed),
-          emissions_imputed=mean(emissions_imputed),
-          conditions_imputed=mean(conditions_imputed),
-          lag_cvote_imputed=mean(lag_cvote_imputed),
-          log_cloan_imputed=mean(log_cloan_imputed),
-          log_gdp_imputed=mean(log_gdp_imputed),
-          total_imputed=mean(total_imputed))
-png("imputed_data_average.png", height =90, width = 1050)
+   summarise(conflicts_imputed=round(mean(conflicts_imputed),1),
+          polity_imputed=round(mean(polity_imputed),1),
+          emissions_imputed=round(mean(emissions_imputed),1),
+          conditions_imputed=round(mean(conditions_imputed),1),
+          lag_cvote_imputed=round(mean(lag_cvote_imputed),1),
+          log_cloan_imputed=round(mean(log_cloan_imputed),1),
+          log_gdp_imputed=round(mean(log_gdp_imputed),1),
+          total_imputed=round(mean(total_imputed),1))
+png("imputed_data_average.png", height =70, width = 950)
 grid.table(imputed_data3)
 dev.off()
 data3<-data2 %>%
   ungroup() %>%
-  summarise(conflicts=mean(conflicts,na.rm = TRUE),
-            polity=mean(polity,na.rm = TRUE),
-            emissions=mean(emissions,na.rm = TRUE),
-            conditions=mean(conditions,na.rm = TRUE),
-            lag_cvote=mean(lag_cvote,na.rm = TRUE),
-            log_cloan=mean(log_cloan,na.rm = TRUE),
-            log_gdp=mean(log_gdp,na.rm = TRUE),
-            total=mean(total,na.rm = TRUE))
-png("data_average.png",height =90, width = 1025)
+  summarise(conflicts=round(mean(conflicts,na.rm = TRUE),1),
+            polity=round(mean(polity,na.rm = TRUE),1),
+            emissions=round(mean(emissions,na.rm = TRUE),1),
+            conditions=round(mean(conditions,na.rm = TRUE),1),
+            lag_cvote=round(mean(lag_cvote,na.rm = TRUE),1),
+            log_cloan=round(mean(log_cloan,na.rm = TRUE),1),
+            log_gdp=round(mean(log_gdp,na.rm = TRUE),1),
+            total=round(mean(total,na.rm = TRUE),1))
+png("data_average.png",height =70, width = 500)
 grid.table(data3)
 dev.off()
 ```
