@@ -276,8 +276,8 @@ imputed_data<-bind_rows(amelia$imputations[[1]],
 #w_imputed<-merge(africa,imputed_data,by=c("country")) %>%
 #  st_queen() %>%
 #  st_as_nb() %>%
-#  write.nb.gal(.,here(file = "w_imputed"))
-w_imputed<-read.gal(here("w_imputed")) #because it's contiguity, no different than w_og
+#  write.nb.gal(.,here("data",file = "w_imputed"))
+w_imputed<-read.gal(here("data","w_imputed")) #because it's contiguity, no different than w_og
 ################################################################################
 #imputed data also used later in "analysis"
 ```
@@ -347,8 +347,8 @@ figure2.3<-figure2.3 %>%
 #w<-merge(africa,data,by=c("country")) %>%
 #  st_queen() %>%
 #  st_as_nb() %>%
-#  write.nb.gal(.,here(file = "w"))
-w_og<-read.gal(here("w_og"))
+#  write.nb.gal(.,here("data",file = "w"))
+w_og<-read.gal(here("data","w_og"))
 ################################################################################
 #panel unit root testing
 ##type in each variable and repeat
