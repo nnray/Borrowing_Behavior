@@ -25,9 +25,24 @@ wb<-read_csv(
         "API_DT.DOD.MWBG.CD_DS2_en_csv_v2_4523873.csv"),
   skip=4
   )
+#conditions
+##world bank
 dfp<-read_excel(
-  here("data","loans","DPFdevpolicyactiondatabase.xlsx"),
+  here("data","conditions","DPFdevpolicyactiondatabase.xlsx"),
   sheet=3
+  )
+dpo<-read_excel(
+  here("data","conditions","WB_Conditions.xlsx"),
+  sheet=2
+  )
+##international monetary fund
+imf<-read_excel(
+  unzip(here("data","conditions","imf.zip"),
+        "Combined.xlsx")
+  )
+imf2<-read_csv(
+  unzip(here("data","conditions","imf_archived.zip"),
+        "ArchSPCPASB.csv")
   )
 #gdp
 gdp<-read.csv(
@@ -95,34 +110,95 @@ voting["recipient_condensed"][voting["recipient_iso3"] == "STP"] <- "Sao Tome an
 voting<-voting %>%
   rename(country=recipient_condensed,year=time,lag_cvote=LINLINECHN,lag_usvote=LINLINEUSA) %>%
   select(country,year,lag_cvote,lag_usvote) %>%
-  filter(year > "2003" & year < "2018") %>%
+  filter(year > "1999" & year < "2018") %>%
   subset(country %in% african_countries)
 ################################################################################
-#cleaning the data on WB loan conditionality
+#conditionality
+##world bank conditionality
+###public dataset from 2004 and up
 dfp["Country"][dfp["Country"] == "Congo"] <- "Republic of the Congo"
 dfp["Country"][dfp["Country"] == "Congo, Democratic Republic of"] <- "Democratic Republic of the Congo"
 dfp["Country"][dfp["Country"] == "Côte d'ivoire"] <- "Cote d'Ivoire"
 dfp["Country"][dfp["Country"] == "Egypt, Arab Republic of"] <- "Egypt"
 dfp["Country"][dfp["Country"] == "Gambia, The"] <- "Gambia"
 dfp["Country"][dfp["Country"] == "The Gambia"] <- "Gambia"
+dfp["Country"][dfp["Country"] == "Cape Verde"] <- "Cabo Verde"
 dfp["Country"][dfp["Country"] == "Sierar Leone"] <- "Sierra Leone"
 dfp<-dfp %>%
   rename(country=Country,year=FY,project=`Project ID`) %>%
   subset(country %in% african_countries) %>%
-  filter(year > "2003" & year < "2018") %>%
+  filter(year < "2018") %>%
   mutate(conditions=1) %>%
   group_by(country,year,project) %>%
-  summarise(conditions=sum(conditions)) %>%
+  summarise(conditions,conditions_average=sum(conditions)) %>%
+  ungroup() %>%
   group_by(country,year) %>%
-  summarise(conditions=mean(conditions)) #`conditions` is now the average number
-#of conditions per project in a given country year
+  summarise(conditions_average=mean(conditions_average),conditions_total=sum(conditions))
+###archived dataset from 2004 and before
+dpo["Country"][dpo["Country"] == "Congo"] <- "Republic of the Congo"
+dpo["Country"][dpo["Country"] == "Congo, Democratic Republic of"] <- "Democratic Republic of the Congo"
+dpo["Country"][dpo["Country"] == "Congo, Democratic"] <- "Democratic Republic of the Congo"
+dpo["Country"][dpo["Country"] == "Congo, Republic of"] <- "Republic of the Congo"
+dpo["Country"][dpo["Country"] == "Egypt, Arab Republic of"] <- "Egypt"
+dpo["Country"][dpo["Country"] == "Gambia, The"] <- "Gambia"
+dpo["Country"][dpo["Country"] == "The Gambia"] <- "Gambia"
+dpo["Country"][dpo["Country"] == "Cape Verde"] <- "Cabo Verde"
+dpo["Country"][dpo["Country"] == "Sierar Leone"] <- "Sierra Leone"
+dpo<-dpo %>%
+  rename(country=Country,year=FY,project=`Project ID`) %>%
+  subset(country %in% african_countries) %>%
+  filter(year > "1999" & year<"2004") %>%
+  mutate(conditions=1) %>%
+  group_by(country,year,project) %>%
+  summarise(conditions,conditions_average=sum(conditions)) %>%
+  ungroup() %>%
+  group_by(country,year) %>%
+  summarise(conditions_average=mean(conditions_average),conditions_total=sum(conditions)) %>%
+  mutate(year=as.numeric(year))
+conditions<-dfp %>%
+  full_join(.,dpo,by=c("country","year","conditions_average","conditions_total")) %>%
+  rename(conditions_wb=conditions_total) %>%
+  select(country,year,conditions_wb)
+##international monetary fund
+imf<-imf %>%
+  rename(year=`Approval Year`,country=`Country Name`) %>%
+  mutate(conditions_imf=1) %>%
+  select(country,year,conditions_imf) %>%
+  mutate(country = str_to_title(country)) %>%
+  group_by(country,year) %>%
+  summarise(conditions_imf=sum(conditions_imf)) %>%
+  filter(year < "2018")
+imf["country"][imf["country"]=="Gambia, The"]<-"Gambia"
+imf["country"][imf["country"]=="Congo, Republic Of"]<-"Republic of the Congo"
+imf["country"][imf["country"]=="Congo,Democratic Republic Of"]<-"Democratic Republic of the Congo"
+imf["country"][imf["country"]=="Cote D'ivoire"]<-"Cote d'Ivoire"
+imf["country"][imf["country"]=="Cape Verde"]<-"Cabo Verde"
+imf<-subset(imf,country %in% african_countries)
+imf2<-imf2 %>%
+  rename(year=`Approval Year`,country=`Country Name`) %>%
+  mutate(conditions_imf=1) %>%
+  select(country,year,conditions_imf) %>%
+  mutate(country = str_to_title(country)) %>%
+  group_by(country,year) %>%
+  summarise(conditions_imf=sum(conditions_imf)) %>%
+  filter(year > "1999")
+imf2["country"][imf2["country"]=="Congo, Democratic Republic Of"]<-"Democratic Republic of the Congo"
+imf2<-subset(imf2,country %in% african_countries)
+conditions<-imf %>%
+  full_join(.,imf2,by=c("country","year","conditions_imf")) %>%
+  full_join(.,conditions,by=c("country","year"))
+conditions["conditions_wb"][is.na(conditions["conditions_wb"])] <- 0
+conditions["conditions_imf"][is.na(conditions["conditions_imf"])] <- 0
+conditions<-conditions %>%
+  group_by(country,year) %>%
+  mutate(conditions=conditions_wb+conditions_imf)
 ################################################################################
 #cleaning the data on Chinese loans
 china["Recipient"][china["Recipient"] == "Congo"] <- "Republic of the Congo"
 china<-china %>%
   rename(country=`Recipient`,year=`Commitment Year`) %>% #chose commitment year as `year`, maybe controversial
   subset(country %in% african_countries) %>%
-  filter(`Flow Type`=="Loan",year > "2003" & year < "2018") %>%
+  filter(`Flow Type`=="Loan",year > "1999" & year < "2018") %>%
   group_by(country,year) %>%
   summarise(cloan=sum(`Amount (Nominal)`))#constant usd 2017
 ################################################################################
@@ -136,7 +212,7 @@ wb<-wb %>%
   rename(country=`Country Name`) %>%
   subset(country %in% african_countries) %>%
   select(-`...67`,-`Indicator Code`,-`Indicator Name`,-`Country Code`) %>%
-  filter(year > "2003" & year < "2018") %>%
+  filter(year > "1999" & year < "2018") %>%
   transform(year=as.numeric(year))
 ################################################################################
 #cleaning the data on Polity scores
@@ -149,7 +225,7 @@ polity["country"][polity["country"] == "Ivory Coast"] <- "Cote d'Ivoire"
 polity["country"][polity["country"] == "Swaziland"] <- "Eswatini"
 polity<-polity %>%
   subset(country %in% african_countries) %>%
-  filter(`year` > "2003" & `year` < "2018") %>%
+  filter(`year` > "1999" & `year` < "2018") %>%
   select(`country`,`year`,`polity2`) %>%
   rename(polity=`polity2`)
 ################################################################################
@@ -158,7 +234,7 @@ gdp["Country.or.Area"][gdp["Country.or.Area"] == "CÃ´te d'Ivoire"] <- "Cote d'
 gdp["Country.or.Area"][gdp["Country.or.Area"] == "Congo"] <- "Republic of the Congo"
 gdp["Country.or.Area"][gdp["Country.or.Area"] == " Former Sudan"]<- "South Sudan"
 gdp<-gdp %>%
-  filter(`Year` > "2003" & `Year` < "2018") %>%
+  filter(`Year` > "1999" & `Year` < "2018") %>%
   select(`Country.or.Area`,`Year`,`Value`) %>%
   subset(`Country.or.Area` %in% african_countries) %>%
   rename(country=`Country.or.Area`,year=Year,gdp=Value)
@@ -171,7 +247,7 @@ ucdp<-ucdp%>%
   group_by(country,year) %>%
   summarise(country, year, conflicts=sum(conflict)) %>%
   distinct() %>%
-  filter(year > "2003" & year < "2018") %>%
+  filter(year > "1999" & year < "2018") %>%
   subset(country %in% african_countries)
 ################################################################################
 #cleaning WB sustainable goal of reduced emissions
@@ -184,7 +260,7 @@ emissions$emissions<-as.numeric(emissions$emissions)
 emissions$year<-str_remove(emissions$year,"\\..*")
 emissions$year<-as.numeric(str_remove(emissions$year,"X"))
 emissions<-emissions %>%
-  filter("2003"<year & year<"2018") %>%
+  filter("1999"<year & year<"2018") %>%
   subset(country %in% african_countries)
 ################################################################################
 #cleaning shapefile for later use
@@ -200,7 +276,7 @@ africa<-africa %>%
 #creating dataset
 data<-full_join(ucdp, polity, by = c("country","year")) %>%
   full_join(., emissions, by = c("country","year")) %>%
-  full_join(., dfp, by = c("country","year")) %>%
+  full_join(., conditions, by = c("country","year")) %>%
   full_join(., china, by = c("country","year")) %>%
   full_join(., wb, by = c("country","year")) %>%
   full_join(., gdp, by = c("country","year")) %>%
@@ -209,22 +285,17 @@ data<-full_join(ucdp, polity, by = c("country","year")) %>%
 data["cloan"][is.na(data["cloan"])] <- 0 #assuming didn't receive loans if NA
 data["wbloan"][is.na(data["wbloan"])] <- 0 #assuming didn't receive loans if NA
 data["conflicts"][is.na(data["conflicts"])] <- 0 #assuming no conflict if NA
-#impute missingness for `conditions` (using average of yearly averages across all countries)
-#data["conditions"][is.na(data["conditions"])] <-{
-#  data %>%
-#    select(year,conditions) %>%
-#    drop_na() %>%
-#    group_by(year) %>%
-#    summarise(conditions=mean(conditions)) %>%
-#    ungroup() %>%
-#    summarise(conditions=mean(conditions)) %>%
-#    as.integer()
-#}
+data["conditions_wb"][is.na(data["conditions_wb"])] <- 0 
+data["conditions_imf"][is.na(data["conditions_imf"])] <- 0
+data["conditions"][is.na(data["conditions"])] <- 0
+#subset dummies (countries who received dfp's and those not)
+#data<-data %>%
+#  mutate(dfp=ifelse(country %in% data["country"][data["conditions_total"]!=0],1,0))
 ################################################################################
 #rebasing loan data to real 2015 US $
 deflator<- deflator %>%
   rename(value=USAGDPDEFAISMEI) %>%
-  subset(value < 103 & value > 80) %>%
+  subset(value < 103 & value > 73) %>%
   select(value) %>%
   as.matrix() %>%
   rep(times=54) %>%
@@ -236,21 +307,25 @@ data$wbloan<-diag(data$wbloan) %*% deflator
 #after rebasing, some data manipulation:
 ##logging financial data for easier comparison
 data<-data %>%
-  mutate(log_cloan=log(cloan),log_wbloan=log(wbloan),
+  mutate(log_cloan=log(cloan),
+         log_wbloan=log(wbloan),
          log_gdp=log(gdp))
 data["log_cloan"][data["log_cloan"] == -Inf] <- 0
 data["log_wbloan"][data["log_wbloan"] == -Inf] <- 0
 ##creating DV for first model
-data<-data %>%
-  group_by(country,year) %>%
-  mutate(total=log_cloan+log_wbloan)
+#data<-data %>%
+#  group_by(country,year) %>%
+#  mutate(total=log_cloan+log_wbloan)
 #creating temporal lags
 data<-data %>% 
   ungroup() %>%
-  mutate(lag_total=dplyr::lag(total),lag_conflicts=dplyr::lag(conflicts),
-         lag_emissions=dplyr::lag(emissions),lag_log_cloan=dplyr::lag(log_cloan))
+  mutate(#lag_total=dplyr::lag(total),
+         lag_conflicts=dplyr::lag(conflicts),
+         lag_emissions=dplyr::lag(emissions),
+         lag_log_cloan=dplyr::lag(log_cloan),
+         lag_conditions=dplyr::lag(conditions))
 ```
-```{r missing}
+```{r missing, eval=FALSE, include=FALSE}
 ################################################################################
 #missing data
 ##multiply imputing connectivity matrix
@@ -268,7 +343,7 @@ imputed_data<-bind_rows(amelia$imputations[[1]],
   summarise(conflicts=mean(conflicts),
             polity=mean(polity),
             emissions=mean(emissions),
-            conditions=mean(conditions),
+            conditions_total=mean(conditions_total),
             lag_cvote=mean(lag_cvote),
             log_cloan=mean(log_cloan),
             log_gdp=mean(log_gdp),
@@ -283,7 +358,7 @@ w_imputed<-read.gal(here("data","w_imputed")) #because it's contiguity, no diffe
 ```
 
 <!-- Making figures. -->
-```{r figures, include=FALSE,warning=FALSE,message=FALSE}
+```{r figures, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 #figure 1
 figure1.1<-panel_data(data,id=country,wave=year) %>% #to use with line_plot()
   subset(country %in% c("Algeria","Angola","Benin","Botswana","Burundi",
@@ -356,10 +431,10 @@ w_og<-read.gal(here("data","w_og"))
 purtest(
   object={
     data %>%
-      select(country,year,conflicts) %>%
+      select(country,year,conditions_total) %>%
       drop_na() %>%
       pdata.frame(index = c("country","year")) %>%
-      select(conflicts) #stationary
+      select(conditions_total) #stationary
   },
   #exo = "trend",
   test = "invnormal"
@@ -381,11 +456,24 @@ purtest(
 #models with original data, limited functionality (e.g., checking spatial dependence) due to missingness
 ##fitting theoretical model (with theoretically motivated temporal/spatial lags) plus period effects from panel unit root test conclusion and checking for heteroskedasticity, serial correlation, unit effects, and unmodeled spatial dependence in residuals
 ###model 1
-model1<-plm(total~lag_total+conditions+lag_cvote+log_gdp+polity,
-               data,effect="time",model="pooling",index=c("country","year"))
+summary(plm(conditions~log_cloan+log_gdp+polity+lag_usvote,data,
+            effect="time",model="pooling",index=c("country","year")))
+summary(plm(log_cloan~conditions+log_gdp+polity+lag_usvote,data,
+            effect="time",model="pooling",index=c("country","year")))
+summary(plm(conditions_total~lag_conditions_total+log_wbloan+log_cloan+log_gdp+polity+lag_usvote,data,
+            effect="time",model="pooling",index=c("country","year")))
+#not a bad result for my theory... more WB money means more conditions (maybe,
+#theoretically, because they are more reliant on WB), while sign for cloan in 
+#correct (negative) direction
+summary(plm(conditions_total~lag_conditions_total+log_wbloan+log_cloan+(log_wbloan*dfp)+(log_cloan*dfp)+
+              log_gdp+polity+lag_usvote,data,effect="time",model="pooling",index=c("country","year")))
+summary(plm(total~conditions_total+
+              log_gdp+polity+lag_usvote,data,effect="time",model="pooling",index=c("country","year")))
+model1<-plm(conditions_total~lag_conditions_total+log_wbloan+log_cloan+log_gdp+polity+lag_usvote,data,
+            effect="time",model="pooling",index=c("country","year"))
 bptest(model1) #heteroskedasticity
-pbgtest(model1) #no serial correlation
-plmtest(model1, effect = "individual", type = c("bp")) #pooling ok
+pbgtest(model1) #serial correlation
+plmtest(model1, effect = "individual", type = c("bp")) #pooling not ok
 w_og<-nb2listw(w_og,style="W",zero.policy = TRUE)
 vcov1<-vcovHC(model1)
 #GWPR.light::GWPR.moran.test(model1, w_og) if balanced plm
